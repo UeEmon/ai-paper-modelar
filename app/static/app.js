@@ -217,3 +217,4 @@ for(const id of ["custom","width","depth","height","overhang","pitch","roof"]){
   el(id).addEventListener("input",sizes);
 }
 hint();sizes();
+restoreUploads();
