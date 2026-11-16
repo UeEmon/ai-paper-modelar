@@ -14,11 +14,14 @@ from .ai import ProposalRequest, proposals
 from .generator import ModelSpec, render_pdf, render_svg, summary
 from .research import research
 from .senrolab import router as senrolab_router
+from .project_routes import router as project_router
+from .projects import LibraryProblem
 from .uploads import add_asset, get_asset, delete_asset, UploadProblem, MAX_FILE_BYTES
 
 HERE = Path(__file__).resolve().parent
 app = FastAPI(title="AI Paper Modelar", version="0.1.0")
 app.include_router(senrolab_router)
+app.include_router(project_router)
 
 
 # SenroLab 向けの /v1/ は、エラーを {"error": "日本語のメッセージ"} で返す（docs/senrolab/openapi.yaml）
@@ -60,6 +63,8 @@ async def plan(req: ProposalRequest):
         return await proposals(req)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc.args[0])) from exc
+    except LibraryProblem as exc:
+        raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
 
 @app.post("/api/model")
 def calculate(req: ModelSpec):

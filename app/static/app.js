@@ -53,6 +53,10 @@ async function restoreUploads(){
   cacheUploads();showUploads();
 }
 async function addUploads(){
+  if(window.paperLibrary&&window.paperLibrary.projectId){
+    await window.paperLibrary.uploadSelected();
+    return;
+  }
   const files=Array.from(el("fileSelect").files||[]);
   if(!files.length){status("ファイルを選択してください。");return;}
   if(files.length+uploaded.length>UPLOAD_LIMIT){
@@ -149,7 +153,10 @@ async function plan(){
     const r=await post("/api/proposals",{
       place:el("place").value.trim(),scale:scale(),style:getSpec().style,
       sources:sources.map(s=>({title:s.title,url:s.url,summary:s.summary})),
-      upload_ids:uploaded.map(u=>u.id),include_uploads:el("allowAiUploads").checked
+      upload_ids:uploaded.map(u=>u.id),
+      project_id:window.paperLibrary?.projectId||null,
+      project_asset_ids:window.paperLibrary?.selectedAssets()||[],
+      include_uploads:el("allowAiUploads").checked
     });
     const result=await r.json();
     for(const p of result.proposals){

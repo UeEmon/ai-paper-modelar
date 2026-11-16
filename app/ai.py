@@ -8,6 +8,7 @@ import httpx
 from pydantic import BaseModel, Field
 
 from .uploads import get_asset
+from .projects import get_asset_for_ai
 
 
 class ProposalRequest(BaseModel):
@@ -17,6 +18,8 @@ class ProposalRequest(BaseModel):
     sources: list[dict] = Field(default_factory=list, max_length=8)
     upload_ids: list[str] = Field(default_factory=list, max_length=8)
     include_uploads: bool = False  # Explicit user opt-in for external API processing.
+    project_id: str | None = None
+    project_asset_ids: list[str] = Field(default_factory=list, max_length=8)
 
 
 LABELS = {
@@ -60,7 +63,16 @@ async def proposals(req: ProposalRequest):
         return offline(req)
 
     # Never access/transmit user media without the UI's opt-in.
-    assets = [get_asset(uid) for uid in dict.fromkeys(req.upload_ids)] if req.include_uploads else []
+    assets = []
+    if req.include_uploads:
+        assets += [get_asset(uid) for uid in dict.fromkeys(req.upload_ids)]
+        if req.project_asset_ids:
+            if not req.project_id:
+                raise ValueError("保存資料を使うにはプロジェクトIDが必要です。")
+            assets += [
+                get_asset_for_ai(req.project_id, uid)
+                for uid in dict.fromkeys(req.project_asset_ids)
+            ]
     context = []
     for asset in assets:
         context.append({

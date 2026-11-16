@@ -3,7 +3,8 @@ WORKDIR /workspace
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt \
- && useradd --system --uid 10001 --no-create-home app
+ && useradd --system --uid 10001 --no-create-home app \
+ && mkdir -p /data && chown 10001:10001 /data
 COPY app ./app
 USER app
 EXPOSE 8086

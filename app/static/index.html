@@ -3,9 +3,25 @@
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>AI PAPER MODELAR | 鉄道ジオラマ</title><link rel="stylesheet" href="/static/styles.css"></head>
 <body>
-<header><div class="brand">▣ <span>AI PAPER MODELAR<small>鉄道模型ジオラマ用ペーパークラフト設計</small></span></div><div class="version">MVP 0.2</div></header>
+<header><div class="brand">▣ <span>AI PAPER MODELAR<small>鉄道模型ジオラマ用ペーパークラフト設計</small></span></div><div class="version">MVP 0.3</div></header>
 <main>
 <section class="controls">
+<section class="projectEditor" aria-label="保存済み制作プロジェクト">
+<p class="eyebrow">00 / PROJECT LIBRARY</p><h2>制作プロジェクト</h2>
+<p class="muted">駅舎ごとに原本資料と模型設定を保存し、後日再編集できます。</p>
+<label for="projectSelect">保存したプロジェクト</label>
+<select id="projectSelect"><option value="">未選択（一時的な作業）</option></select>
+<div class="twocol">
+<div><label for="projectTitle">プロジェクト名</label><input id="projectTitle" maxlength="120" placeholder="例：旧国立駅舎"></div>
+<div><label for="projectNotes">制作メモ</label><input id="projectNotes" maxlength="1000" placeholder="制作方針・注意事項"></div>
+</div>
+<div class="projectButtons">
+<button id="newProject" class="secondary">新規保存</button>
+<button id="saveProject" class="secondary" disabled>設定を保存</button>
+<button id="deleteProject" class="danger" disabled>削除</button>
+</div>
+<p class="muted">設計条件を変更したら「設定を保存」を押してください。</p>
+</section>
 <p class="eyebrow">01 / RESEARCH</p><h1>駅舎から、紙の情景へ。</h1>
 <p class="lead">駅名・構造物名から参考資料を探し、デザインを選択。縮尺を指定してA4展開図を作成します。</p>
 <label for="place">駅名・構造物名</label>
@@ -14,7 +30,7 @@
 <div id="research" aria-live="polite"></div>
 <div class="sectionhead"><span class="eyebrow">01B / YOUR REFERENCES</span></div>
 <p class="lead">撮影写真・外観図・平面図・設計図（JPEG / PNG / WebP / PDF）を追加できます。</p>
-<label for="fileSelect">資料ファイル（1件15MBまで・合計8件）</label>
+<label for="fileSelect">資料ファイル（1件15MBまで）</label>
 <input id="fileSelect" type="file" multiple accept=".jpg,.jpeg,.png,.webp,.pdf,image/jpeg,image/png,image/webp,application/pdf">
 <div class="twocol">
 <div><label for="viewType">資料の方向</label><select id="viewType">
@@ -27,7 +43,11 @@
 </div>
 <button id="uploadButton" class="secondary uploadButton">選択ファイルを追加</button>
 <div id="uploaded" class="uploadlist" aria-live="polite"></div>
-<p class="muted">サーバーでは縮小したプレビュー・PDFの一部テキストだけを一時保存し、1時間後に失効します。原本は保存しません。</p>
+<p class="muted">プロジェクト未選択時は一時保存（1時間で失効）。選択中は原本・プレビュー・設計設定を永続保存します。</p>
+<div class="sectionhead"><span class="eyebrow">PROJECT / SAVED REFERENCES</span></div>
+<p class="muted">プロジェクト選択中のアップロードは原本も保存されます。</p>
+<div class="inline copyControl"><label for="copyDestination">資料の複製先</label><select id="copyDestination"><option value="">複製先を選択</option></select></div>
+<div id="storedAssets" class="uploadlist" aria-live="polite"></div>
 <label class="aiConsent"><input type="checkbox" id="allowAiUploads">
 <span>資料をAI提案にも利用する（任意）<small>チェックを入れて提案すると、最大3件の縮小画像（PDFは1ページ目）と資料メモ・抽出テキストが設定した外部AIへ送信されます。</small></span></label>
 <div class="sectionhead"><span class="eyebrow">02 / DESIGN</span><button id="plan" class="secondary">AIで案を提案</button></div>
@@ -75,4 +95,5 @@
 </main>
 <footer>AI Paper Modelar · Prototype · 写真・図面の使用条件を確認してください。</footer>
 <script defer src="/static/app.js"></script>
+<script defer src="/static/projects.js"></script>
 </body></html>
