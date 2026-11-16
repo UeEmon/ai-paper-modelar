@@ -36,6 +36,8 @@ jobs:
         run: python -m pytest -q
       - name: JavaScript syntax check
         run: node --check app/static/app.js
+      - name: Project library JavaScript syntax check
+        run: node --check app/static/projects.js
 
   image:
     needs: test
@@ -85,6 +87,3 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-
-      - name: Project library JavaScript syntax check
-        run: node --check app/static/projects.js
