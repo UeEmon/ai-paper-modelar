@@ -6,4 +6,10 @@ services:
     env_file:
       - path: .env
         required: false
+    environment:
+      PAPER_MODELAR_DATA_DIR: /data
+    volumes:
+      - paper_modelar_data:/data
     restart: unless-stopped
+volumes:
+  paper_modelar_data:
