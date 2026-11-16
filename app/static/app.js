@@ -1,6 +1,86 @@
 "use strict";
 const el = id => document.getElementById(id);
 let sources = [], spec = null, currentPage = 0, pages = 0, previewURL = null;
+
+const uploaded = [];
+const UPLOAD_LIMIT = 8;
+const REF_KEY = "paper-modelar-uploads-v1";
+
+function cacheUploads(){
+  try { sessionStorage.setItem(REF_KEY, JSON.stringify(uploaded.map(x => x.id))); }
+  catch { /* browser may disable session storage */ }
+}
+function showUploads(){
+  const list = el("uploaded"); list.replaceChildren();
+  if(!uploaded.length){text(list,"p","アップロードされた資料はありません。","muted");return;}
+  for(const item of uploaded){
+    const box=text(list,"div","","uploadItem");
+    const img=document.createElement("img");
+    img.src=item.preview_url;
+    img.alt=item.name+" のプレビュー（PDFは1ページ目）";
+    img.loading="lazy";
+    box.appendChild(img);
+    const meta=text(box,"div","","uploadMeta");
+    text(meta,"b",item.name);
+    text(meta,"small",item.kind.toUpperCase()+" / "+item.view+" / "+(item.size_bytes/1048576).toFixed(1)+"MB");
+    if(item.notes)text(meta,"small",item.notes);
+    const del=text(box,"button","削除","secondary");
+    del.type="button";del.setAttribute("aria-label",item.name+" を削除");
+    del.addEventListener("click",async()=>{
+      del.disabled=true;
+      try{
+        const r=await fetch("/api/uploads/"+encodeURIComponent(item.id),{method:"DELETE"});
+        if(!r.ok && r.status!==404)throw Error("削除できませんでした。");
+        const index=uploaded.findIndex(x=>x.id===item.id);
+        if(index>=0)uploaded.splice(index,1);
+        cacheUploads();showUploads();status("資料を削除しました");
+      }catch(e){del.disabled=false;status(e.message);}
+    });
+    list.appendChild(box);
+  }
+}
+async function restoreUploads(){
+  let ids=[];
+  try{ids=JSON.parse(sessionStorage.getItem(REF_KEY)||"[]");}catch{ids=[];}
+  if(!Array.isArray(ids))ids=[];
+  for(const id of ids.slice(0,UPLOAD_LIMIT)){
+    if(typeof id!=="string"||!/^[0-9a-f]{32}$/.test(id))continue;
+    try{
+      const r=await fetch("/api/uploads/"+id,{cache:"no-store"});
+      if(r.ok)uploaded.push(await r.json());
+    }catch{/* expired or inaccessible */}
+  }
+  cacheUploads();showUploads();
+}
+async function addUploads(){
+  const files=Array.from(el("fileSelect").files||[]);
+  if(!files.length){status("ファイルを選択してください。");return;}
+  if(files.length+uploaded.length>UPLOAD_LIMIT){
+    status("合計8件までです。不要な資料を削除してください。");return;
+  }
+  el("uploadButton").disabled=true;
+  try{
+    let added=0;
+    for(const f of files){
+      if(f.size>15*1024*1024)throw Error(f.name+" は15MBを超えています。");
+      const body=new FormData();
+      body.append("file",f,f.name);
+      body.append("view",el("viewType").value);
+      body.append("notes",el("fileNotes").value);
+      const r=await fetch("/api/uploads",{method:"POST",body});
+      if(!r.ok){
+        const data=await r.json().catch(()=>({}));
+        throw Error(f.name+": "+(typeof data.detail==="string"?data.detail:"アップロードに失敗"));
+      }
+      uploaded.push(await r.json());added++;
+      cacheUploads();showUploads();
+    }
+    el("fileSelect").value="";
+    status(added+"件を追加しました");
+  }catch(e){status("追加エラー");window.alert(e.message);}
+  finally{el("uploadButton").disabled=false;}
+}
+
 const hints = {
   "150":"日本型在来線のNゲージに適合（線路幅9mm）。",
   "160":"新幹線・外国型Nで一般的（線路幅9mm）。",
@@ -68,7 +148,8 @@ async function plan(){
   try{
     const r=await post("/api/proposals",{
       place:el("place").value.trim(),scale:scale(),style:getSpec().style,
-      sources:sources.map(s=>({title:s.title,url:s.url,summary:s.summary}))
+      sources:sources.map(s=>({title:s.title,url:s.url,summary:s.summary})),
+      upload_ids:uploaded.map(u=>u.id),include_uploads:el("allowAiUploads").checked
     });
     const result=await r.json();
     for(const p of result.proposals){
@@ -124,6 +205,7 @@ async function pdf(){
   finally{el("savePdf").disabled=false;}
 }
 el("search").addEventListener("click",search);
+el("uploadButton").addEventListener("click",addUploads);
 el("plan").addEventListener("click",plan);
 el("generate").addEventListener("click",generate);
 el("saveSvg").addEventListener("click",svg);
@@ -135,3 +217,4 @@ for(const id of ["custom","width","depth","height","overhang","pitch","roof"]){
   el(id).addEventListener("input",sizes);
 }
 hint();sizes();
+restoreUploads();
