@@ -145,10 +145,11 @@ def build_parts(spec: ModelSpec) -> list[dict]:
     o = miniature_mm(spec.overhang_m, spec.scale)
     rise = (d / 2) * tan(radians(spec.pitch_deg)) if spec.roof == "gable" else 0
     parts = [
-        wall_part("Front wall", w, h, rise, spec, True, True),
-        wall_part("Back wall", w, h, rise, spec, True, False),
-        wall_part("Left wall", d, h, 0, spec),
-        wall_part("Right wall", d, h, 0, spec),
+        wall_part("Front wall", w, h, 0, spec, True, True),
+        wall_part("Back wall", w, h, 0, spec, True, False),
+        # The ridge runs along the width, so the triangular gables sit on the depth walls.
+        wall_part("Left wall", d, h, rise, spec),
+        wall_part("Right wall", d, h, rise, spec),
     ]
     if spec.roof == "gable":
         slope = (d / 2 + o) / cos(radians(spec.pitch_deg))

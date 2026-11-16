@@ -2,17 +2,41 @@
 from pathlib import Path
 
 import httpx
-from fastapi import FastAPI, HTTPException, Query, File, Form, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, Query, Request, UploadFile
+from fastapi.exception_handlers import http_exception_handler, request_validation_exception_handler
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
+from starlette.exceptions import HTTPException as StarletteHTTPException
 from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 from .ai import ProposalRequest, proposals
 from .generator import ModelSpec, render_pdf, render_svg, summary
 from .research import research
+from .senrolab import router as senrolab_router
 from .uploads import add_asset, get_asset, delete_asset, UploadProblem, MAX_FILE_BYTES
 
 HERE = Path(__file__).resolve().parent
 app = FastAPI(title="AI Paper Modelar", version="0.1.0")
+app.include_router(senrolab_router)
+
+
+# SenroLab 向けの /v1/ は、エラーを {"error": "日本語のメッセージ"} で返す（docs/senrolab/openapi.yaml）
+@app.exception_handler(RequestValidationError)
+async def validation_error(request: Request, exc: RequestValidationError):
+    if request.url.path.startswith("/v1/"):
+        return JSONResponse({"error": "入力が正しくありません"}, status_code=400)
+    return await request_validation_exception_handler(request, exc)
+
+
+@app.exception_handler(StarletteHTTPException)
+async def http_error(request: Request, exc: StarletteHTTPException):
+    if request.url.path.startswith("/v1/"):
+        message = exc.detail if isinstance(exc.detail, str) else "エラーになりました"
+        return JSONResponse({"error": message}, status_code=exc.status_code, headers=exc.headers)
+    return await http_exception_handler(request, exc)
+
+
 app.mount("/static", StaticFiles(directory=HERE / "static"), name="static")
 
 @app.get("/", include_in_schema=False)

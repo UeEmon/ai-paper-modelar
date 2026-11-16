@@ -33,3 +33,19 @@ def test_tiling():
 def test_gable_pitch_requires_slope():
     with pytest.raises(ValueError):
         ModelSpec(roof="gable",pitch_deg=0)
+
+
+def test_gable_triangles_match_roof_slope():
+    from math import cos, hypot, radians
+    from app.generator import build_parts, miniature_mm
+    spec = ModelSpec(width_m=18, depth_m=9, height_m=6, overhang_m=0, roof="gable", pitch_deg=30)
+    parts = {p["name"]: p for p in build_parts(spec)}
+    d = miniature_mm(spec.depth_m, spec.scale)
+    w = miniature_mm(spec.width_m, spec.scale)
+    # Gables are on the depth walls; the long walls are plain rectangles.
+    assert parts["Left wall"]["graphics"][0]["type"] == "poly"
+    assert parts["Front wall"]["graphics"][0]["type"] == "rect"
+    pts = parts["Left wall"]["graphics"][0]["points"]
+    rake = hypot(pts[2][0] - pts[1][0], pts[2][1] - pts[1][1])
+    assert abs(rake - (d / 2) / cos(radians(30))) < 1e-6
+    assert abs(parts["Roof A"]["w"] - 10 - w) < 1e-6

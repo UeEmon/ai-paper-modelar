@@ -29,6 +29,16 @@ Docker Desktopを起動したら、リポジトリ直下で:
 AI APIを使う場合は .env に AI_PROVIDER=openai と OPENAI_API_KEY=your-key などを設定してください。GeminiならAI_PROVIDER=gemini / GEMINI_API_KEY、AnthropicならAI_PROVIDER=anthropic / ANTHROPIC_API_KEYを使います。
 モデル名は OPENAI_MODEL / GEMINI_MODEL / ANTHROPIC_MODEL で変更できます。APIキーをコミットしないでください。
 
+## SenroLab 連携（展開図API）
+
+SenroLab（Nゲージのレイアウト設計アプリ）の「再現してみた」で作った仮オブジェクトを、
+`POST /v1/nets` で実寸の展開図（用紙ごとの SVG）にします。仕様は [docs/senrolab/](docs/senrolab/README.md)。
+
+- 種類: トンネル・鉄橋・高架橋・駅舎・ホーム・建物・名所・山・水面・その他。駅舎・建物は切妻屋根の部品（app/generator.py）を用紙に詰めて並べ、用紙に収まらない大きさは箱形にします。
+- 環境変数 `PAPERCRAFT_API_TOKEN` を設定すると `Authorization: Bearer <トークン>` を確かめます（SenroLab 側も同じ値）。
+- `GET /health` で死活確認。
+- イメージは CI が ghcr.io/ueemon/ai-paper-modelar に置きます（arm64）。main は `:main`、タグ `v*` は `:<版>` と `:stable`。
+
 ## テスト
 
     python -m pip install -r requirements-dev.txt
@@ -65,5 +75,6 @@ PDFの寸法抽出、図面のトレース、写真からの正確な形状復�
 - app/ai.py: 各社AI APIと同意時の参考画像送信
 - app/uploads.py: 参考資料の検証、縮小プレビュー、一時保管、削除
 - app/generator.py: 寸法計算・図面出力
+- app/senrolab.py: SenroLab 向けの展開図API（/v1/nets）
 - app/static/: Web画面
 - tests/: 動作確認
