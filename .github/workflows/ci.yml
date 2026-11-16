@@ -85,3 +85,6 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+
+      - name: Project library JavaScript syntax check
+        run: node --check app/static/projects.js
