@@ -21,3 +21,5 @@ jobs:
         run: python -m compileall -q app
       - name: Unit tests
         run: python -m pytest -q
+      - name: JavaScript syntax check
+        run: node --check app/static/app.js
