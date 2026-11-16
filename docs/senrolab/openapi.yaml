@@ -1,0 +1,181 @@
+openapi: 3.1.0
+info:
+  title: ai-paper-modelar 展開図API（SenroLab 連携）
+  version: 1.0.0
+  description: |
+    SenroLab（Nゲージのレイアウト設計アプリ）の「再現してみた」で作った仮オブジェクト
+    （実在の製品にない、シミュレーション上だけの物）を、ペーパークラフトの展開図にするAPI。
+    呼ぶのは SenroLab のサーバーだけ（ブラウザから直接は呼ばない）。
+    ジェネレーターは SenroLab と同じ内部ネットワークに置き、インターネットには公開しない。
+servers:
+  - url: http://papercraft:8080
+    description: docker compose の内部ネットワークでの例（SenroLab の PAPERCRAFT_URL）
+security:
+  - {}
+  - bearer: []
+paths:
+  /v1/nets:
+    post:
+      operationId: createNets
+      summary: 仮オブジェクト1個の展開図を作る
+      description: |
+        寸法は模型の実寸（mm、1/150 に縮めた後）。返す SVG は実寸で印刷できるよう width/height を mm で指定する。
+        SenroLab は SVG を <img> として表示・印刷する（スクリプト・外部の画像やフォントは使えない）。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/NetsRequest" }
+            example:
+              source: senrolab
+              scale: "1/150"
+              paper: A4
+              object:
+                name: 〇〇トンネル
+                kind: tunnel
+                length: 248
+                width: 60
+                height: 40
+                note: 山を貫く長いトンネル
+              notice: SenroLab のシミュレーション上の仮オブジェクトです。実在の製品・鉄道会社の公式なものではありません。
+      responses:
+        "200":
+          description: 展開図
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/NetsResponse" }
+              example:
+                pages:
+                  - '<svg xmlns="http://www.w3.org/2000/svg" width="210mm" height="297mm" viewBox="0 0 210 297">…</svg>'
+                warnings:
+                  - トンネルの高さを40mmから45mmにしました（列車が通る高さ）
+        "400":
+          description: 入力が正しくない
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "401":
+          description: トークンが違う（トークンを設定しているとき）
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422":
+          description: 入力は正しいが作れない（大きすぎる、対応していない種類など）
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "500":
+          description: ジェネレーター内部のエラー
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+  /health:
+    get:
+      operationId: health
+      summary: 死活確認
+      security: []
+      responses:
+        "200":
+          description: 動いている（中身は問わない）
+components:
+  securitySchemes:
+    bearer:
+      type: http
+      scheme: bearer
+      description: |
+        任意。ジェネレーター側で API トークンを設定したときは、SenroLab が
+        Authorization: Bearer <トークン> を付ける（SenroLab の PAPERCRAFT_API_TOKEN と同じ値）。
+  schemas:
+    Kind:
+      type: string
+      description: 仮オブジェクトの種類
+      enum: [tunnel, bridge, viaduct, station, platform, building, landmark, mountain, water, other]
+      x-enum-descriptions:
+        tunnel: トンネル。線路をまたぐ。length は覆う線路の長さ、width は覆いの幅、height は高さ
+        bridge: 鉄橋。線路をまたぐ。height はけたの深さの目安
+        viaduct: 高架橋。線路をまたぐ。height は地面から線路面までの高さ
+        station: 駅舎。線路の横に置く箱形
+        platform: ホーム。線路の縁に沿う低い箱形
+        building: 建物。箱形
+        landmark: 名所・ランドマーク（塔・寺社・城など）。箱形を基本にしてよい
+        mountain: 山・丘
+        water: 川・海・湖（平らな板）
+        other: その他（箱形でよい）
+    SimObject:
+      type: object
+      required: [name, kind, length, width, height, note]
+      additionalProperties: false
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 60
+          description: 名前（展開図の見出しに使う）。実在の駅名・路線名・地名を含むことがある
+        kind: { $ref: "#/components/schemas/Kind" }
+        length:
+          type: number
+          minimum: 1
+          maximum: 2000
+          description: 線路に沿った方向の長さ(mm)
+        width:
+          type: number
+          minimum: 1
+          maximum: 800
+          description: 線路と直角の方向の幅(mm)
+        height:
+          type: number
+          minimum: 0
+          maximum: 400
+          description: 高さ(mm)
+        note:
+          type: string
+          maxLength: 200
+          description: 実物のどんな特徴を表したか（空のこともある）
+    NetsRequest:
+      type: object
+      required: [source, scale, paper, object, notice]
+      additionalProperties: false
+      properties:
+        source:
+          type: string
+          const: senrolab
+        scale:
+          type: string
+          const: "1/150"
+          description: Nゲージの縮尺。寸法はすでにこの縮尺の実寸
+        paper:
+          type: string
+          enum: [A4, A3]
+          description: 用紙（縦置き）
+        object: { $ref: "#/components/schemas/SimObject" }
+        notice:
+          type: string
+          maxLength: 300
+          description: 展開図に印刷する注意書き（実在の製品・公式なものではない旨）
+    NetsResponse:
+      type: object
+      required: [pages]
+      properties:
+        pages:
+          type: array
+          minItems: 1
+          maxItems: 20
+          description: 用紙1枚ごとの SVG。<svg で始まり（XML宣言は可）、1枚 2,000,000 文字まで
+          items:
+            type: string
+            maxLength: 2000000
+        warnings:
+          type: array
+          maxItems: 20
+          description: 利用者に見せる注意（日本語）
+          items:
+            type: string
+            maxLength: 300
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: string
+          maxLength: 300
+          description: 利用者にそのまま見せるメッセージ（日本語）
