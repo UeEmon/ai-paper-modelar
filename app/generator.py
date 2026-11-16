@@ -207,7 +207,7 @@ def _svg_graphic(g: dict) -> str:
     fill = g.get("fill", "none")
     if g["type"] == "rect":
         return ('<rect x="{x}" y="{y}" width="{w}" height="{h}" fill="{fill}"'.format(
-            **g, fill=fill) + s + '/>')
+            **g) + s + '/>')
     if g["type"] == "line":
         return ('<line x1="{x1}" y1="{y1}" x2="{x2}" y2="{y2}"'.format(**g)
                 + s + '/>')
