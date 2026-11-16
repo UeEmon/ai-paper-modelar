@@ -85,3 +85,54 @@ def test_ai_opt_in_and_legacy_proposal():
     assert ProposalRequest(place="門司港駅").include_uploads is False
     result = client.post("/api/proposals", json={"place": "門司港駅"})
     assert result.status_code == 200
+
+
+def test_uploaded_media_requires_explicit_ai_consent(monkeypatch):
+    """Only checked opt-in may include base64 media in provider requests."""
+    import asyncio
+    import json
+    import httpx
+    from app import ai
+    from app.uploads import add_asset, delete_asset
+
+    asset = add_asset(image_bytes(), "station.png", "front", "駅正面")
+    sent = []
+    original_client = httpx.AsyncClient
+
+    def handler(request):
+        body = json.loads(request.content)
+        sent.append(body)
+        proposal = json.dumps({
+            "proposals": [{"style": "faithful", "title": "再現型",
+                           "description": "外観を確認して制作"}],
+            "notes": ["寸法は未確認"]
+        }, ensure_ascii=False)
+        return httpx.Response(
+            200, json={"output": [{"content": [
+                {"type": "output_text", "text": proposal}
+            ]}]},
+        )
+
+    def fake_client(**kwargs):
+        return original_client(transport=httpx.MockTransport(handler), **kwargs)
+
+    monkeypatch.setenv("AI_PROVIDER", "openai")
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+    monkeypatch.setattr(ai.httpx, "AsyncClient", fake_client)
+    try:
+        no_consent = ai.ProposalRequest(
+            place="旧駅舎", upload_ids=[asset.id], include_uploads=False
+        )
+        result = asyncio.run(ai.proposals(no_consent))
+        assert result["analyzed_uploads"] == 0
+        assert "input_image" not in json.dumps(sent[-1])
+
+        consent = ai.ProposalRequest(
+            place="旧駅舎", upload_ids=[asset.id], include_uploads=True
+        )
+        result = asyncio.run(ai.proposals(consent))
+        assert result["analyzed_uploads"] == 1
+        assert "input_image" in json.dumps(sent[-1])
+        assert "station.png" in json.dumps(sent[-1])
+    finally:
+        delete_asset(asset.id)
