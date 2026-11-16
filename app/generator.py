@@ -70,10 +70,13 @@ def wall_part(title: str, width: float, height: float, rise: float, spec: ModelS
     wall_color, _, glass_color = COLORS[spec.style]
     g = []
     x, y = 5.0, 5.0 + rise
-    rect(g, x, y, width, height, wall_color, kind="cut")
     if rise:
-        polygon(g, [(x, y), (x + width / 2, 5), (x + width, y)],
-                wall_color)
+        # The triangular gable and lower wall are ONE piece: no cut at the eave.
+        polygon(g, [(x, y + height), (x, y), (x + width / 2, 5),
+                    (x + width, y), (x + width, y + height)], wall_color)
+        line(g, x, y, x + width, y, "detail", "#b8a991")
+    else:
+        rect(g, x, y, width, height, wall_color, kind="cut")
     # Separate glue tabs at left, right and bottom; dashed lines are folds.
     tab_top = y + min(4, height / 5)
     tab_bottom = y + height - min(4, height / 5)
