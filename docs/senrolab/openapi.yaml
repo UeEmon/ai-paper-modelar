@@ -8,7 +8,7 @@ info:
     呼ぶのは SenroLab のサーバーだけ（ブラウザから直接は呼ばない）。
     ジェネレーターは SenroLab と同じ内部ネットワークに置き、インターネットには公開しない。
 servers:
-  - url: http://papercraft:8080
+  - url: http://papercraft:8086
     description: docker compose の内部ネットワークでの例（SenroLab の PAPERCRAFT_URL）
 security:
   - {}

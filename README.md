@@ -1,33 +1,66 @@
-# ai-paper-modelar
+# AI Paper Modelar / 鉄道模型ジオラマ用ペーパークラフトジェネレーター
 
-Nゲージ（1/150）のペーパークラフトの展開図を作るAPIです。
-SenroLab（UeEmon/Nine-Gage-Systems）の「再現してみた」で作った仮オブジェクト（トンネル・鉄橋・駅舎など、実在の製品にない物）の種類と寸法を受け取り、実寸で印刷できるSVG（用紙1枚ずつ）を返します。
+駅舎・橋梁・鉄道関連建物などの紙模型を設計するWebアプリの初期版です。
 
-- API の仕様: [docs/senrolab/README.md](docs/senrolab/README.md)・[docs/senrolab/openapi.yaml](docs/senrolab/openapi.yaml)
-- 依存パッケージなし（Node 22 の標準機能だけ）
+## 初期実装
 
-## 動かす
+- Wikipedia日本語版で駅舎・構造物を検索し、参考情報のURLを一覧表示。
+- OpenAI・Gemini・AnthropicのAPIを切替可能。APIキーはサーバー側環境変数に保持。未設定ならオフライン案を表示。
+- 忠実再現、標準デフォルメ、アニメ風、昭和レトロ、簡単組立を選択。
+- 縮尺は1/150、1/160、1/80、1/87、1/220、任意1/20〜1/500。
+- 幅、奥行、軒高、屋根、勾配を指定し、模型寸法とA4実寸PDF・SVGを生成。
+- 50mm印刷チェック線、切断・折線・のりしろ表示、タイル分割。
+- Docker Composeでローカル起動。
 
-```sh
-npm start                       # http://localhost:8080
-PAPERCRAFT_API_TOKEN=xxxx npm start   # POST /v1/nets に Bearer トークンを求める
-npm test
-```
+## 起動方法
 
-## 作る展開図
+Docker Desktopを起動したら、リポジトリ直下で:
 
-| 種類 | 展開図 |
-| --- | --- |
-| tunnel | 覆い（側壁・天井・側壁の帯）と、アーチ形の穴のある坑口2枚。内側の高さは30mm以上にする |
-| bridge | トラス模様の側面のけた2枚と床 |
-| viaduct | アーチ模様の側面2枚と床 |
-| station・building・landmark・other | 4面の壁の帯（窓の模様）と屋根 |
-| platform | 4面の帯と上面 |
-| mountain | 四角錐台（上面と4枚の斜面） |
-| water | 波の模様の板 |
+    cp .env.example .env
+    docker compose up -d --build
 
-用紙より長い部品は、折り線の所（長すぎれば等分）で分け、貼り合わせるのりしろを付けます。
+ブラウザで http://localhost:8086 を開きます。API定義は http://localhost:8086/docs です。
+停止コマンド:
 
-## 置き方
+    docker compose down
 
-CI が main とタグ `v*` で `ghcr.io/ueemon/ai-paper-modelar` にイメージ（arm64）を置きます。Oracle Cloud では専用VM `papercraft-1` で動かします（UeEmon/oracle-cloud-deploy の `papercraft/`）。インターネットには公開せず、SenroLab のVMからだけ届くようにします。
+AI APIを使う場合は .env に AI_PROVIDER=openai と OPENAI_API_KEY=your-key などを設定してください。GeminiならAI_PROVIDER=gemini / GEMINI_API_KEY、AnthropicならAI_PROVIDER=anthropic / ANTHROPIC_API_KEYを使います。
+モデル名は OPENAI_MODEL / GEMINI_MODEL / ANTHROPIC_MODEL で変更できます。APIキーをコミットしないでください。
+
+## SenroLab 連携（展開図API）
+
+SenroLab（Nゲージのレイアウト設計アプリ）の「再現してみた」で作った仮オブジェクトを、
+`POST /v1/nets` で実寸の展開図（用紙ごとの SVG）にします。仕様は [docs/senrolab/](docs/senrolab/README.md)。
+
+- 種類: トンネル・鉄橋・高架橋・駅舎・ホーム・建物・名所・山・水面・その他。駅舎・建物は切妻屋根の部品（app/generator.py）を用紙に詰めて並べ、用紙に収まらない大きさは箱形にします。
+- 環境変数 `PAPERCRAFT_API_TOKEN` を設定すると `Authorization: Bearer <トークン>` を確かめます（SenroLab 側も同じ値）。
+- `GET /health` で死活確認。
+- イメージは CI が ghcr.io/ueemon/ai-paper-modelar に置きます（arm64）。main は `:main`、タグ `v*` は `:<版>` と `:stable`。
+
+## テスト
+
+    python -m pip install -r requirements-dev.txt
+    pytest -q
+
+## 実装上の制約
+
+- 検索はWikipediaの概要情報に限られます。一次資料・実寸・立面図・構造図・著作権は未検証です。
+- **実在駅舎の忠実な3D復元、写真からの自動テクスチャ作成、画像AI生成はまだありません。**
+- 現在の展開図は利用者が入力した寸法に基づく**一般的な簡易建物**です。建物名だけで実寸が取得されたり形状が復元されるものではありません。
+- スタイル切替は配色・窓の表示等の初期実装です。アニメ風の画像生成は次の段階です。
+- 部品の接着構造は試作段階なので、接合検証・追加ののりしろ・組立説明書を改良する必要があります。
+- PDFには英語部品名を使います。日本語フォントへの対応は今後行います。
+
+## 次の開発
+
+一次資料の出典台帳、写真・立面図からの形状推定、編集可能な3Dプレビュー、組立強度の確認、印刷モードの充実。
+
+### ディレクトリ
+
+- app/main.py: FastAPI
+- app/research.py: 公開資料検索
+- app/ai.py: 各社AI API
+- app/generator.py: 寸法計算・図面出力
+- app/senrolab.py: SenroLab 向けの展開図API（/v1/nets）
+- app/static/: Web画面
+- tests/: 動作確認

@@ -84,17 +84,17 @@ ai-paper-modelar は、この仕様のAPIを持つコンテナとして作れば
 services:
   papercraft:
     image: ghcr.io/ueemon/ai-paper-modelar:stable
-    expose: ["8080"]
+    expose: ["8086"]
     networks: [prod-edge]
   nine-gage:
     environment:
-      PAPERCRAFT_URL: http://papercraft:8080
+      PAPERCRAFT_URL: http://papercraft:8086
 ```
 
 ## 動作確認
 
 ```sh
-curl -s http://localhost:8080/v1/nets -H 'Content-Type: application/json' -d '{
+curl -s http://localhost:8086/v1/nets -H 'Content-Type: application/json' -d '{
   "source":"senrolab","scale":"1/150","paper":"A4",
   "object":{"name":"テストトンネル","kind":"tunnel","length":248,"width":60,"height":40,"note":""},
   "notice":"SenroLab のシミュレーション上の仮オブジェクトです。"

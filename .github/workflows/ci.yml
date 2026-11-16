@@ -2,12 +2,16 @@
 #   main への push   → ghcr.io/ueemon/ai-paper-modelar:main と :main-<コミット>
 #   タグ v1.2.3 の push → :1.2.3 と :stable（Oracle Cloud の papercraft-1 が使う）
 name: CI
-
 on:
-  pull_request:
   push:
-    branches: [main]
-    tags: ["v*"]
+    branches:
+      - main
+      - 'feat/**'
+    tags:
+      - 'v*'
+  pull_request:
+    branches:
+      - main
 
 permissions:
   contents: read
@@ -18,13 +22,18 @@ concurrency:
 
 jobs:
   test:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-python@v5
         with:
-          node-version: 22
-      - run: npm test
+          python-version: '3.12'
+      - name: Install dependencies
+        run: python -m pip install -r requirements-dev.txt
+      - name: Syntax check
+        run: python -m compileall -q app
+      - name: Unit tests
+        run: python -m pytest -q
 
   image:
     needs: test
@@ -60,13 +69,13 @@ jobs:
           severity: CRITICAL
           ignore-unfixed: true
           exit-code: "1"
-      - if: github.event_name == 'push'
+      - if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - if: github.event_name == 'push'
+      - if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
         uses: docker/build-push-action@v6
         with:
           context: .

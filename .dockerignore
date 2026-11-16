@@ -1,5 +1,7 @@
-node_modules
+tests
 .git
-test
-docs
-*.md
+.github
+.env
+__pycache__
+*.pyc
+.pytest_cache
