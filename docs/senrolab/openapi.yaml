@@ -48,7 +48,7 @@ paths:
                 pages:
                   - '<svg xmlns="http://www.w3.org/2000/svg" width="210mm" height="297mm" viewBox="0 0 210 297">…</svg>'
                 warnings:
-                  - トンネルの高さを40mmから45mmにしました（列車が通る高さ）
+                  - トンネルの高さを20mmから30mmにしました（列車が通る高さ）
         "400":
           description: 入力が正しくない
           content:
