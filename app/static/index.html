@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="ja">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>AI PAPER MODELAR | 鉄道ジオラマ</title><link rel="stylesheet" href="/static/styles.css"></head>
+<body>
+<header><div class="brand">▣ <span>AI PAPER MODELAR<small>鉄道模型ジオラマ用ペーパークラフト設計</small></span></div><div class="version">MVP 0.1</div></header>
+<main>
+<section class="controls">
+<p class="eyebrow">01 / RESEARCH</p><h1>駅舎から、紙の情景へ。</h1>
+<p class="lead">駅名・構造物名から参考資料を探し、デザインを選択。縮尺を指定してA4展開図を作成します。</p>
+<label for="place">駅名・構造物名</label>
+<div class="inline"><input id="place" value="東京駅 丸の内駅舎" maxlength="120"><button id="search" class="secondary">資料検索</button></div>
+<p class="muted">公開情報検索はWikipediaの概要のみ。実寸や構造図、写真の利用許諾は別途確認が必要です。</p>
+<div id="research" aria-live="polite"></div>
+<div class="sectionhead"><span class="eyebrow">02 / DESIGN</span><button id="plan" class="secondary">AIで案を提案</button></div>
+<div class="stylegrid">
+<label class="style"><input type="radio" name="style" value="faithful"><span>忠実再現<small>外観の再現を優先</small></span></label>
+<label class="style"><input type="radio" name="style" value="standard" checked><span>標準デフォルメ<small>特徴を残して簡略化</small></span></label>
+<label class="style"><input type="radio" name="style" value="anime"><span>アニメ風<small>輪郭や色彩を強調</small></span></label>
+<label class="style"><input type="radio" name="style" value="retro"><span>昭和レトロ<small>落ち着いた経年表現</small></span></label>
+<label class="style"><input type="radio" name="style" value="easy"><span>簡単組立<small>部品数を減らす</small></span></label>
+</div>
+<div id="proposals" aria-live="polite"></div>
+<div class="sectionhead"><span class="eyebrow">03 / SCALE GUIDE</span></div>
+<div class="twocol">
+<div><label for="scale">模型規格</label><select id="scale">
+<option value="150">1/150 日本型N</option>
+<option value="160">1/160 新幹線・外国型N</option>
+<option value="80">1/80 日本型16番</option>
+<option value="87">1/87 HO</option>
+<option value="220">1/220 Z</option>
+<option value="custom">任意の縮尺</option></select></div>
+<div><label for="custom">任意縮尺 1/X</label><input id="custom" type="number" value="100" min="20" max="500" disabled></div>
+</div>
+<p class="muted" id="scaleGuide"></p>
+<div class="twocol">
+<div><label for="width">実物 幅 (m)</label><input id="width" type="number" value="18" min="0.1" max="100" step=".1"></div>
+<div><label for="depth">実物 奥行 (m)</label><input id="depth" type="number" value="8" min="0.1" max="100" step=".1"></div>
+<div><label for="height">実物 軒高 (m)</label><input id="height" type="number" value="7.5" min=".1" max="50" step=".1"></div>
+<div><label for="pitch">屋根勾配 (°)</label><input id="pitch" type="number" value="30" min="5" max="60"></div>
+<div><label for="roof">屋根形状</label><select id="roof"><option value="gable">切妻</option><option value="flat">陸屋根</option></select></div>
+<div><label for="overhang">軒の出 (m)</label><input id="overhang" type="number" value="0.3" min="0" max="2" step=".1"></div>
+</div>
+<div id="scaleResult" class="result" aria-live="polite"></div>
+<p class="muted">初期の寸法は架空の例です。入力前に資料から確認してください。</p>
+<button id="generate" class="mainbutton">この条件でA4展開図を生成</button>
+</section>
+<section class="workspace">
+<div class="workhead"><div><p class="eyebrow">04 / WORKSPACE</p><h2>A4実寸プレビュー</h2></div><span id="status" class="status">待機中</span></div>
+<div class="preview"><div id="placeholder" class="placeholder"><span>▧</span><p>「展開図を生成」でプレビューを表示</p></div><img id="drawing" alt="紙模型展開図のA4プレビュー" hidden></div>
+<div class="bar"><div><button id="prev" class="secondary" disabled>前へ</button><span id="page">— / —</span><button id="next" class="secondary" disabled>次へ</button></div>
+<div><button id="saveSvg" class="secondary" disabled>SVG保存</button><button id="savePdf" disabled>PDF保存</button></div></div>
+<aside><h3>印刷と組立ガイド</h3><p>A4用紙に倍率100%で印刷し、下部の50mm基準線を定規で測ってください。「用紙サイズに合わせる」はオフにします。</p>
+<p>実線は切断、破線は折り目。窓や扉は印刷による表現です。大きなパーツは5mm重ねて貼り合わせます。</p>
+<p>初期版は一般的な建物形状のテンプレートです。実在駅舎の3D形状・立面図の自動復元は未実装です。</p></aside>
+</section>
+</main>
+<footer>AI Paper Modelar · Prototype · 写真・図面の使用条件を確認してください。</footer>
+<script defer src="/static/app.js"></script>
+</body></html>
