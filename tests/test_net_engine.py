@@ -143,7 +143,7 @@ def test_invalid_parameters_are_rejected():
 
 
 def test_legacy_building_and_box_unchanged():
-    building = spec_for("building", scale=150, width_m=18, depth_m=8)
+    building = spec_for("building", scale=150, width_m=18, depth_m=8, roof="gable", pitch_deg=30)
     assert any(part["name"] == "Roof A" for part in build_parts(building))
     box = spec_for("box")
     assert len(build_parts(box)) == 6
