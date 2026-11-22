@@ -20,6 +20,7 @@ from typing import Any
 from pydantic import BaseModel, Field
 
 from .generator import ModelSpec
+from .mesh_unfolder import MeshError, load_mesh, thumbnail
 from .uploads import (
     EXTENSIONS, MAX_FILE_BYTES, VIEWS, UploadProblem,
     _prepare_image, _prepare_pdf,
@@ -214,7 +215,7 @@ def delete_project(project_id: str):
 
 def _asset_path(project_id: str, stored_name: str) -> Path:
     # Stored names were generated internally; always reject non-generated names.
-    if not re.fullmatch(r"[0-9a-f]{32}\.(jpg|png|webp|pdf|jpeg)", stored_name):
+    if not re.fullmatch(r"[0-9a-f]{32}\.(jpg|png|webp|pdf|jpeg|obj|stl)", stored_name):
         raise LibraryProblem("保存ファイルの識別情報が不正です。", 500)
     return _root() / "projects" / _id(project_id) / "files" / stored_name
 
@@ -255,21 +256,26 @@ def save_asset(project_id: str, content: bytes, filename: str, view: str, notes:
         raise LibraryProblem("資料サイズは1件15MB以内にしてください。", 413)
     filename = _name(filename)
     ext = ("." + filename.rsplit(".", 1)[-1].lower()) if "." in filename else ""
-    if ext not in EXTENSIONS:
-        raise LibraryProblem("JPEG・PNG・WebP・PDFのみ対応します。", 415)
+    if ext not in EXTENSIONS | {".obj", ".stl"}:
+        raise LibraryProblem("JPEG・PNG・WebP・PDF・OBJ・STLのみ対応します。", 415)
     if view not in VIEWS:
         raise LibraryProblem("資料の方向を選択してください。")
     notes = (notes or "").strip()
     if len(notes) > 400:
         raise LibraryProblem("メモは400文字以内です。")
     try:
-        if ext == ".pdf":
+        if ext in {".obj", ".stl"}:
+            mesh = load_mesh(content, filename)
+            preview, kind, excerpt = thumbnail(mesh), "mesh", ""
+        elif ext == ".pdf":
             preview, kind, excerpt = _prepare_pdf(content)
         else:
             preview, kind = _prepare_image(content)
             excerpt = ""
     except UploadProblem as exc:
         raise LibraryProblem(str(exc), exc.status_code) from exc
+    except MeshError as exc:
+        raise LibraryProblem(str(exc), exc.code) from exc
 
     with _LOCK, _db() as conn:
         _project_row(conn, project_id)
@@ -384,6 +390,8 @@ def get_asset_for_ai(project_id: str, asset_id: str):
     from .uploads import Asset
     with _LOCK, _db() as conn:
         row = _asset_row(conn, project_id, asset_id)
+        if row["kind"] == "mesh":
+            raise LibraryProblem("OBJ/STL原本は画像AI参照として送信できません。メッシュ展開画面を使用してください。", 422)
         path = _preview_path(project_id, asset_id)
         if not path.is_file():
             raise LibraryProblem("資料画像が見つかりません。", 404)
