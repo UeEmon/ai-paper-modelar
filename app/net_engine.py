@@ -93,6 +93,38 @@ def _cap(name: str, radius: float, fill: str, sides: int | None = None) -> dict:
     return _part(name, [_poly(vertices, fill)])
 
 
+def _cap_with_tabs(name: str, radius: float, fill: str,
+                   sides: int | None = None) -> dict:
+    """Cap with per-edge external glue flaps and scored tab roots.
+
+    The cap's primary polygon is circumscribed by the stated radius.
+    For round caps, chords approximate a circle; folded tabs attach the
+    cap to the cone wall. Regular polygon caps use the exact side count.
+    """
+    n = sides if sides else max(16, min(64, ceil(2 * pi * radius / 8)))
+    verts = _regular_vertices(radius, n)
+    contour = []
+    scores = []
+    for i, p in enumerate(verts):
+        q = verts[(i + 1) % n]
+        dx, dy = q[0] - p[0], q[1] - p[1]
+        side = hypot(dx, dy)
+        ux, uy = dx / side, dy / side
+        nx, ny = uy, -ux
+        margin = min(1.2, side * 0.14)
+        tab = min(3.5, side * 0.15)
+        root0 = (p[0] + ux * margin, p[1] + uy * margin)
+        root1 = (q[0] - ux * margin, q[1] - uy * margin)
+        contour.extend([
+            p, root0,
+            (root0[0] + nx * tab, root0[1] + ny * tab),
+            (root1[0] + nx * tab, root1[1] + ny * tab),
+            root1,
+        ])
+        scores.append(_line(root0, root1))
+    return _part(name, [_poly(contour, fill)] + scores)
+
+
 def _strip(name: str, widths: list[float], height: float, fill: str,
            *, score_panel_edges: bool = True) -> dict:
     """One continuous strip with tabs on top, bottom and end seam.
@@ -254,9 +286,9 @@ def build_parametric_parts(spec, color: str) -> list[dict]:
                 _cap("Bottom cap", radius, color),
             ]
         parts = [_frustum_side(radius, top_radius, height, color),
-                 _cap("Bottom cap", radius, color)]
+                 _cap_with_tabs("Bottom cap", radius, color)]
         if top_radius > 0:
-            parts.append(_cap("Top cap", top_radius, color))
+            parts.append(_cap_with_tabs("Top cap", top_radius, color))
         return parts
     if spec.template == "prism":
         side = 2 * radius * sin(pi / spec.sides)
@@ -269,7 +301,7 @@ def build_parametric_parts(spec, color: str) -> list[dict]:
         side = 2 * radius * sin(pi / spec.sides)
         apothem = radius * cos(pi / spec.sides)
         altitude = hypot(height, apothem)
-        return [_cap("Base polygon", radius, color, spec.sides)] + [
+        return [_cap_with_tabs("Base polygon", radius, color, spec.sides)] + [
             _pyramid_face("Triangle " + str(i + 1), side, altitude, color)
             for i in range(spec.sides)
         ]
