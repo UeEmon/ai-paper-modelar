@@ -1,11 +1,15 @@
 "use strict";
 (function(){
   const get=id=>document.getElementById(id);
-  const {AIVault,defaults,PREFIX}=window.PaperAIVault;
+  const {AIVault,defaults,endpoints,isLocal,PREFIX}=window.PaperAIVault;
   let vault;
   const message=value=>{get("aiMessage").textContent=value;};
   function fields(){
     const provider=get("aiProvider").value,config=vault.data?.providers[provider];
+    get("aiLocal").hidden=!isLocal(provider);
+    get("aiEndpoint").value=config?.endpoint||endpoints[provider]||"";
+    get("aiVision").checked=config?.vision===true;
+    get("aiKeyHint").textContent=isLocal(provider)?"APIキー（任意・空欄なら保存済みキーを維持）":"APIキー（空欄なら選択先の保存済みキーを維持）";
     get("aiModel").value=config?.model||defaults[provider]||"";
     get("aiKey").value="";
     get("aiKey").placeholder=config?"保存済み（変更時だけ入力）":"APIキーを入力";
@@ -49,7 +53,7 @@
     await vault.unlock(get("aiProfile").value,get("aiPassword").value);message("解除しました。");
   }));
   get("aiSave").addEventListener("click",()=>action(async()=>{
-    await vault.save(get("aiProvider").value,get("aiModel").value.trim(),get("aiKey").value.trim());message("暗号化して保存しました。");
+    await vault.save(get("aiProvider").value,get("aiModel").value.trim(),get("aiKey").value.trim(),{endpoint:get("aiEndpoint").value.trim(),vision:get("aiVision").checked});message("暗号化して保存しました。");
   }));
   get("aiLock").addEventListener("click",()=>{vault.lock();render();message("ロックしました。");});
   get("aiDelete").addEventListener("click",()=>action(async()=>{

@@ -57,3 +57,21 @@ test('storage denial, invalid data and lock during async work fail closed',async
   const save=v.save('openai','test','changed');v.lock();await assert.rejects(save);
   await v.unlock(id,'long-password!');assert.equal(v.headers()['X-AI-Key'],'secret');
 });
+test('local models, optional keys, endpoints and vision survive encryption independently of cloud settings',async()=>{
+  const s=new Storage(),v=new AIVault(s,webcrypto);
+  const id=await v.create('Local','local-passphrase');
+  await v.save('openai','cloud-model','test-cloud-secret');
+  await v.save('ollama','org/model:q4_K_M','',{endpoint:'http://localhost:11434/',vision:false});
+  assert.deepEqual(v.headers(),{'X-AI-Provider':'ollama','X-AI-Model':'org/model:q4_K_M','X-AI-Endpoint':'http://localhost:11434','X-AI-Vision':'false'});
+  await v.save('local_openai','publisher/model','test-local-secret',{endpoint:'http://localhost:1234/v1',vision:true});
+  const record=s.getItem(PREFIX+id);
+  for(const value of ['test-local-secret','localhost:1234','publisher/model','test-cloud-secret'])assert.ok(!record.includes(value));
+  v.lock();await v.unlock(id,'local-passphrase');
+  assert.equal(v.headers()['X-AI-Vision'],'true');
+  assert.equal(v.headers()['X-AI-Key'],'test-local-secret');
+  await v.save('openai','cloud-model','');
+  assert.equal(v.headers()['X-AI-Key'],'test-cloud-secret');
+  assert.equal(v.headers()['X-AI-Endpoint'],undefined);
+  await assert.rejects(v.save('ollama','test','',{endpoint:'http://user:secret@localhost:11434'}));
+  await assert.rejects(v.save('ollama','test','',{endpoint:'file:///tmp/test'}));
+});

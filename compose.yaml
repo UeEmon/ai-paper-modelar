@@ -8,6 +8,8 @@ services:
         required: false
     environment:
       PAPER_MODELAR_DATA_DIR: /data
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     volumes:
       - paper_modelar_data:/data
     restart: unless-stopped

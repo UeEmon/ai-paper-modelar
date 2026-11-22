@@ -2,7 +2,13 @@
 /* No plaintext secrets, passphrases or decryption keys are persisted. */
 (function(root){
   const PREFIX="paper-modelar-ai-v1:";
-  const defaults={openai:"gpt-4.1-mini",gemini:"gemini-2.5-flash",anthropic:"claude-sonnet-4-5"};
+  const defaults={openai:"gpt-4.1-mini",gemini:"gemini-2.5-flash",anthropic:"claude-sonnet-4-5",ollama:"qwen3:8b",local_openai:"local-model"};
+  const endpoints={ollama:"http://localhost:11434",local_openai:"http://localhost:1234/v1"};
+  const isLocal=provider=>Object.hasOwn(endpoints,provider);
+  function validEndpoint(value){
+    try{const url=new URL(value);return ["http:","https:"].includes(url.protocol)&&url.port&&!url.username&&!url.password&&!url.search&&!url.hash&&/^[!-~]{1,2048}$/.test(value);}
+    catch{return false;}
+  }
   const encode=new TextEncoder(), decode=new TextDecoder();
   const b64=bytes=>btoa(String.fromCharCode(...bytes));
   const bytes=value=>Uint8Array.from(atob(value),c=>c.charCodeAt(0));
@@ -54,15 +60,23 @@
       const ciphertext=await this.crypto.subtle.encrypt({name:"AES-GCM",iv,additionalData:encode.encode(id)},key,encode.encode(JSON.stringify(data)));
       return {version:1,name,salt:b64(salt),iv:b64(iv),ciphertext:b64(new Uint8Array(ciphertext))};
     }
-    async save(provider,model,apiKey){
+    async save(provider,model,apiKey,options={}){
       if(!this.data)throw Error("プロファイルを解除してください。");
       const epoch=this.epoch,id=this.id;
       const data=structuredClone(this.data);
       if(provider!=="none"){
-        if(!Object.hasOwn(defaults,provider)||!/^[A-Za-z0-9][A-Za-z0-9._:-]{0,119}$/.test(model))throw Error("モデルIDを確認してください。");
-        const key=apiKey||data.providers[provider]?.apiKey;
-        if(!key||!/^[!-~]{1,512}$/.test(key))throw Error("APIキーを入力してください。");
+        const local=isLocal(provider);
+        const pattern=local?/^[A-Za-z0-9][A-Za-z0-9._:/-]{0,199}$/:/^[A-Za-z0-9][A-Za-z0-9._:-]{0,119}$/;
+        if(!Object.hasOwn(defaults,provider)||!pattern.test(model))throw Error("モデルIDを確認してください。");
+        const key=apiKey||data.providers[provider]?.apiKey||"";
+        if((!local&&!key)||!/^[!-~]{0,512}$/.test(key))throw Error("APIキーを入力してください。");
         data.providers[provider]={model,apiKey:key};
+        if(local){
+          const endpoint=(options.endpoint||endpoints[provider]).replace(/\/+$/,"");
+          if(!validEndpoint(endpoint))throw Error("ポート番号を含む接続先URLを確認してください。");
+          data.providers[provider].endpoint=endpoint;
+          data.providers[provider].vision=options.vision===true;
+        }
       }
       data.provider=provider;
       const old=JSON.parse(this.storage.getItem(PREFIX+id));
@@ -75,9 +89,15 @@
       if(!this.data)return {};
       const provider=this.data.provider,config=this.data.providers[provider];
       if(provider==="none"||!config)return {};
-      return {"X-AI-Provider":provider,"X-AI-Model":config.model,"X-AI-Key":config.apiKey};
+      const headers={"X-AI-Provider":provider,"X-AI-Model":config.model};
+      if(config.apiKey)headers["X-AI-Key"]=config.apiKey;
+      if(isLocal(provider)){
+        headers["X-AI-Endpoint"]=config.endpoint;
+        headers["X-AI-Vision"]=config.vision?"true":"false";
+      }
+      return headers;
     }
   }
-  root.PaperAIVault={AIVault,defaults,PREFIX};
+  root.PaperAIVault={AIVault,defaults,endpoints,isLocal,PREFIX};
   if(typeof module!=="undefined")module.exports=root.PaperAIVault;
 })(globalThis);

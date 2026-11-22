@@ -1,7 +1,10 @@
 """Text design proposals with optional image/PDF reference input and user consent."""
+import asyncio
 import base64
 import json
 import re
+import os
+from urllib.parse import urlsplit
 from dataclasses import dataclass, field
 from typing import Literal
 
@@ -17,20 +20,56 @@ class AICredentials:
     provider: str
     model: str
     api_key: str = field(repr=False)
+    endpoint: str = ""
+    vision: bool = False
+
+
+LOCAL_PROVIDERS = {"ollama", "local_openai"}
+DEFAULT_LOCAL_URLS = {
+    f"http://{host}:{port}{path}"
+    for host in ("localhost", "127.0.0.1", "[::1]", "host.docker.internal")
+    for port, path in ((11434, ""), (1234, "/v1"))
+}
+
+
+def local_endpoint(value: str) -> str:
+    """Only server-approved destinations; browser settings cannot expand the allowlist."""
+    def normalize(url):
+        if len(url) > 2048 or not re.fullmatch(r"[!-~]+", url):
+            raise ValueError("Invalid endpoint")
+        parts = urlsplit(url)
+        if (parts.scheme not in {"http", "https"} or not parts.hostname
+                or parts.username is not None or parts.password is not None
+                or parts.query or parts.fragment or not parts.port):
+            raise ValueError("Invalid endpoint")
+        return url.rstrip("/")
+    endpoint = normalize(value)
+    configured = os.getenv("PAPER_MODELAR_LOCAL_AI_URLS")
+    allowed = DEFAULT_LOCAL_URLS if configured is None else {
+        normalize(url.strip()) for url in configured.split(",") if url.strip()
+    }
+    if endpoint not in allowed:
+        raise ValueError("Unapproved endpoint")
+    return endpoint
 
 
 def credentials_from_headers(headers):
     """Validate manually so validation responses never echo credential inputs."""
-    values = [headers.get(name, "") for name in
-              ("x-ai-provider", "x-ai-model", "x-ai-key")]
-    if not any(values):
+    provider, model, key, endpoint, vision = [headers.get(name, "") for name in
+        ("x-ai-provider", "x-ai-model", "x-ai-key", "x-ai-endpoint", "x-ai-vision")]
+    if not any((provider, model, key, endpoint, vision)):
         return None
-    provider, model, key = values
-    if (provider not in {"openai", "gemini", "anthropic"}
-            or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._:-]{0,119}", model)
-            or not re.fullmatch(r"[!-~]{1,512}", key)):
+    local = provider in LOCAL_PROVIDERS
+    pattern = r"[A-Za-z0-9][A-Za-z0-9._:/-]{0,199}" if local else r"[A-Za-z0-9][A-Za-z0-9._:-]{0,119}"
+    if (provider not in {"openai", "gemini", "anthropic"} | LOCAL_PROVIDERS
+            or not re.fullmatch(pattern, model)
+            or not re.fullmatch(r"[!-~]{0,512}" if local else r"[!-~]{1,512}", key)
+            or vision not in {"", "false", "true"}
+            or (not local and (endpoint or vision))):
         raise ValueError("AI設定を確認してください。")
-    return AICredentials(provider, model, key)
+    if local:
+        endpoint = local_endpoint(endpoint)
+    return AICredentials(provider, model, key, endpoint, vision == "true")
 
 
 class ProposalRequest(BaseModel):
@@ -80,6 +119,9 @@ async def proposals(req: ProposalRequest, credentials: AICredentials | None = No
     if credentials is None:
         return offline(req)
     provider, model, key = credentials.provider, credentials.model, credentials.api_key
+
+    local = provider in LOCAL_PROVIDERS
+    endpoint = local_endpoint(credentials.endpoint) if local else ""
 
     # Never access/transmit user media without the UI's opt-in.
     assets = []
@@ -131,16 +173,39 @@ async def proposals(req: ProposalRequest, credentials: AICredentials | None = No
         "parametric_template": req.template,
         "online_source_metadata": req.sources[:8],
         "user_uploaded_reference_metadata": context,
-        "uploaded_image_count": min(len(assets), 3),
+        "uploaded_image_count": min(len(assets), 3) if not local or credentials.vision else 0,
     }, ensure_ascii=False)
 
     images = [
         base64.b64encode(a.preview).decode("ascii")
-        for a in assets[:3]
+        for a in assets[:3] if not local or credentials.vision
     ]
     try:
-        async with httpx.AsyncClient(timeout=40) as client:
-            if provider == "openai":
+        async with asyncio.timeout(120 if local else 40), httpx.AsyncClient(timeout=120 if local else 40,
+                                     trust_env=not local, follow_redirects=False) as client:
+            if local:
+                auth = {"Authorization": "Bearer " + key} if key else {}
+                if provider == "ollama":
+                    user = {"role": "user", "content": prompt}
+                    if images:
+                        user["images"] = images
+                    body = {"model": model, "stream": False, "format": "json",
+                            "options": {"num_predict": 1600},
+                            "messages": [{"role": "system", "content": system}, user]}
+                    r = await client.post(endpoint + "/api/chat", headers=auth, json=body)
+                    r.raise_for_status()
+                    raw = r.json()["message"]["content"]
+                else:
+                    content = [{"type": "text", "text": prompt}]
+                    content.extend({"type": "image_url", "image_url": {
+                        "url": "data:image/jpeg;base64," + image}} for image in images)
+                    body = {"model": model, "stream": False, "max_tokens": 1600,
+                            "messages": [{"role": "system", "content": system},
+                                         {"role": "user", "content": content if images else prompt}]}
+                    r = await client.post(endpoint + "/chat/completions", headers=auth, json=body)
+                    r.raise_for_status()
+                    raw = r.json()["choices"][0]["message"]["content"]
+            elif provider == "openai":
                 content = [{"type": "input_text", "text": prompt}]
                 content.extend(
                     {"type": "input_image", "image_url": "data:image/jpeg;base64," + b}
@@ -204,15 +269,18 @@ async def proposals(req: ProposalRequest, credentials: AICredentials | None = No
         if not accepted:
             raise ValueError("No proposals")
         notes = [str(x)[:240] for x in result.get("notes", [])[:8]]
-        if len(assets) > 3:
+        if local and assets and not credentials.vision:
+            notes.append("ローカルAIの画像送信は無効です。資料の説明とPDF抽出テキストだけを参照しました。")
+        if len(assets) > 3 and (not local or credentials.vision):
             notes.append("画像解析は先頭3件のみ。その他はファイルの説明とPDFテキストを参照しました。")
-        accepted = [{k: v.replace(key, "[redacted]") for k, v in item.items()}
-                    for item in accepted]
-        notes = [note.replace(key, "[redacted]") for note in notes]
+        if key:
+            accepted = [{k: v.replace(key, "[redacted]") for k, v in item.items()}
+                        for item in accepted]
+            notes = [note.replace(key, "[redacted]") for note in notes]
         return {"provider": provider, "place": req.place,
                 "proposals": accepted, "notes": notes,
                 "analyzed_uploads": len(images)}
-    except (httpx.HTTPError, ValueError, KeyError, TypeError, IndexError, AttributeError):
+    except (httpx.HTTPError, TimeoutError, ValueError, KeyError, TypeError, IndexError, AttributeError):
         answer = offline(req)
-        answer["notes"].insert(0, "外部AIへの接続・応答に問題があるため定型案を表示しています。")
+        answer["notes"].insert(0, "AIへの接続・応答に問題があるため定型案を表示しています。")
         return answer
