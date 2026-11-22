@@ -50,6 +50,7 @@ def test_paid_generation_created_once_and_mesh_returns_only_to_browser(monkeypat
     assert not list(tmp_path.rglob('*'))
     body=json.loads(next(r for r in calls if r.method=='POST' and not r.url.path.endswith('/files')).content)
     assert (body['should_texture'] if provider=='meshy' else body['texture']) is False
+    if provider=='tripo':assert 'quad' not in body # v2.5 does not accept this parameter, even false
 
 
 def test_hf_queue_preserves_session_state_and_fixed_download_host(monkeypatch):

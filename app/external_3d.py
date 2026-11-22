@@ -128,7 +128,7 @@ async def generate(c,provider,model,key,jpeg):
         return await download(c,result['model_urls']['glb'],provider)
     if provider=='tripo':
         uploaded=payload(await c.post(TRIPO+'/files',headers=headers,files={'file':('reference.jpg',jpeg,'image/jpeg')}),True)
-        created=payload(await c.post(TRIPO+'/generation/image-to-model',headers=headers,json={'input':uploaded['file_token'],'model':model,'face_limit':300,'texture':False,'pbr':False,'quad':False}),True)
+        created=payload(await c.post(TRIPO+'/generation/image-to-model',headers=headers,json={'input':uploaded['file_token'],'model':model,'face_limit':300,'texture':False,'pbr':False}),True)
         tid=task_id(created['task_id'])
         result=await poll(c,TRIPO+'/tasks/'+tid,key,True)
         return await download(c,result['output']['model_url'],provider)
