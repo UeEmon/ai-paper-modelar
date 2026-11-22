@@ -16,9 +16,15 @@
 <div class="projectButtons"><button id="aiCreate" type="button" class="secondary">新規作成</button><button id="aiUnlock" type="button">解除</button><button id="aiLock" type="button" class="secondary">ロック</button><button id="aiDelete" type="button" class="danger">削除</button></div>
 <fieldset id="aiEditor" disabled>
 <legend>プロファイルのAI設定</legend>
-<label for="aiProvider">プロバイダー</label><select id="aiProvider"><option value="none">使わない（定型案）</option><option value="openai">OpenAI</option><option value="gemini">Gemini</option><option value="anthropic">Anthropic</option></select>
-<label for="aiModel">モデルID（利用可能なIDを入力）</label><input id="aiModel" maxlength="120" autocomplete="off" spellcheck="false">
-<label for="aiKey">APIキー（空欄なら選択先の保存済みキーを維持）</label><input id="aiKey" type="password" maxlength="512" autocomplete="off" spellcheck="false">
+<label for="aiProvider">プロバイダー</label><select id="aiProvider"><option value="none">使わない（定型案）</option><option value="openai">OpenAI</option><option value="gemini">Gemini</option><option value="anthropic">Anthropic</option><option value="ollama">Ollama（ローカル）</option><option value="local_openai">OpenAI互換（ローカル / LM Studio等）</option></select>
+<label for="aiModel">モデルID（利用可能なIDを入力）</label><input id="aiModel" maxlength="200" autocomplete="off" spellcheck="false">
+<div id="aiLocal" hidden>
+<label for="aiEndpoint">ローカルLLMの接続先URL</label><input id="aiEndpoint" type="url" maxlength="2048" autocomplete="off" spellcheck="false">
+<p class="muted">アプリサーバーから接続します。同じPCなら localhost、Docker利用時は host.docker.internal を指定してください。別PC上のアプリから、ブラウザ側PCのlocalhostには接続できません。</p>
+<label class="localVision" for="aiVision"><input id="aiVision" type="checkbox">画像対応モデルとして資料画像を送信する</label>
+<p class="muted">通常はテキストのみ。画像を送るには、資料欄のAI参照許可も必要です。接続先が許可されていない場合はREADMEの設定を確認してください。</p>
+</div>
+<label id="aiKeyHint" for="aiKey">APIキー（空欄なら選択先の保存済みキーを維持）</label><input id="aiKey" type="password" maxlength="512" autocomplete="off" spellcheck="false">
 <button id="aiSave" type="button">暗号化して保存・使用</button>
 <p class="muted">保存後の設定をAI提案に使用します。プロバイダーごとのモデルとキーを保持します。</p>
 </fieldset></fieldset><p id="aiMessage" role="status" aria-live="polite"></p>
@@ -78,7 +84,7 @@
 <div class="inline copyControl"><label for="copyDestination">資料の複製先</label><select id="copyDestination"><option value="">複製先を選択</option></select></div>
 <div id="storedAssets" class="uploadlist" aria-live="polite"></div>
 <label class="aiConsent"><input type="checkbox" id="allowAiUploads">
-<span>資料をAI提案にも利用する（任意）<small>チェックを入れて提案すると、最大3件の縮小画像（PDFは1ページ目）と資料メモ・抽出テキストが設定した外部AIへ送信されます。</small></span></label>
+<span>資料をAI提案にも利用する（任意）<small>チェックを入れて提案すると、資料メモ・抽出テキストと最大3件の縮小画像（PDFは1ページ目）を選択中のAIへ送信します。ローカルAIの画像送信には、設定画面での有効化も必要です。</small></span></label>
 <div class="sectionhead"><span class="eyebrow">02 / DESIGN</span><button id="plan" class="secondary">AIで案を提案</button></div>
 <div class="stylegrid">
 <label class="style"><input type="radio" name="style" value="faithful"><span>忠実再現<small>外観の再現を優先</small></span></label>
