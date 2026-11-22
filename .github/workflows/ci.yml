@@ -49,6 +49,7 @@ jobs:
           PYTHON: python
       - name: AI settings JavaScript syntax check
         run: |
+          node --check app/static/tabs.js
           node --check app/static/ai-vault.js
           node --check app/static/ai-settings.js
       - name: JavaScript syntax check

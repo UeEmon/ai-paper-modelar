@@ -5,48 +5,16 @@
 <body>
 <header><div class="brand">▣ <span>AI PAPER MODELAR<small>AIでアイデアと参考資料から紙模型をデザイン</small></span></div><div class="version">MVP 0.5</div></header>
 <main>
-<details class="aiSettings">
-<summary>生成AIの設定 <span id="aiState">ロック中 · 定型案を使用</span></summary>
-<p>キーはパスフレーズで暗号化し、このブラウザのプロファイル別に保存します。解除中はAI提案時にこのサーバーを経由して選択先へ送信します。API利用料が発生する場合があります。</p>
-<p class="muted">パスフレーズは保存・復旧できません。共有端末では終了時にロックしてください。ブラウザ拡張や実行中の不正なスクリプトから解除中のキーを守ることはできません。プロファイルはログイン認証ではありません。</p>
-<fieldset id="aiControls">
-<label for="aiProfile">ユーザープロファイル</label><select id="aiProfile"></select>
-<label for="aiName">新規プロファイル名</label><input id="aiName" maxlength="80" autocomplete="off" placeholder="名前（端末内に平文で保存）">
-<label for="aiPassword">パスフレーズ（作成時は12文字以上）</label><input id="aiPassword" type="password" autocomplete="off" maxlength="256">
-<div class="projectButtons"><button id="aiCreate" type="button" class="secondary">新規作成</button><button id="aiUnlock" type="button">解除</button><button id="aiLock" type="button" class="secondary">ロック</button><button id="aiDelete" type="button" class="danger">削除</button></div>
-<fieldset id="aiEditor" disabled>
-<legend>プロファイルのAI設定</legend>
-<label for="aiProvider">プロバイダー</label><select id="aiProvider"><option value="none">使わない（定型案）</option><option value="openai">OpenAI</option><option value="gemini">Gemini</option><option value="anthropic">Anthropic</option><option value="ollama">Ollama（ローカル）</option><option value="local_openai">OpenAI互換（ローカル / LM Studio等）</option></select>
-<label for="aiModel">モデルID（利用可能なIDを入力）</label><input id="aiModel" maxlength="200" autocomplete="off" spellcheck="false">
-<div id="aiLocal" hidden>
-<label for="aiEndpoint">ローカルLLMの接続先URL</label><input id="aiEndpoint" type="url" maxlength="2048" autocomplete="off" spellcheck="false">
-<p class="muted">アプリサーバーから接続します。同じPCなら localhost、Docker利用時は host.docker.internal を指定してください。別PC上のアプリから、ブラウザ側PCのlocalhostには接続できません。</p>
-<label class="localVision" for="aiVision"><input id="aiVision" type="checkbox">画像対応モデルとして資料画像を送信する</label>
-<p class="muted">通常はテキストのみ。画像を送るには、資料欄のAI参照許可も必要です。接続先が許可されていない場合はREADMEの設定を確認してください。</p>
+<div class="pageIntro"><div><p class="eyebrow">PAPERCRAFT WORKSPACE</p><h1>アイデアを、紙でかたちに。</h1><p>資料を集める、寸法で作る、3Dモデルを展開する。目的に合わせてタブを選んでください。</p></div></div>
+<div class="appTabs" role="tablist" aria-label="作業の切り替え">
+<button type="button" role="tab" id="tab-design" aria-controls="panel-design" aria-selected="true" tabindex="0">資料・AI提案</button>
+<button type="button" role="tab" id="tab-shape" aria-controls="panel-shape" aria-selected="false" tabindex="-1">基本形状</button>
+<button type="button" role="tab" id="tab-mesh" aria-controls="panel-mesh" aria-selected="false" tabindex="-1">3Dモデル</button>
+<button type="button" role="tab" id="tab-projects" aria-controls="panel-projects" aria-selected="false" tabindex="-1">プロジェクト</button>
+<button type="button" role="tab" id="tab-settings" aria-controls="panel-settings" aria-selected="false" tabindex="-1">AI設定</button>
 </div>
-<label id="aiKeyHint" for="aiKey">APIキー（空欄なら選択先の保存済みキーを維持）</label><input id="aiKey" type="password" maxlength="512" autocomplete="off" spellcheck="false">
-<button id="aiSave" type="button">暗号化して保存・使用</button>
-<p class="muted">保存後の設定をAI提案に使用します。プロバイダーごとのモデルとキーを保持します。</p>
-</fieldset></fieldset><p id="aiMessage" role="status" aria-live="polite"></p>
-</details>
-<section class="controls">
-<section class="projectEditor" aria-label="保存済み制作プロジェクト">
-<p class="eyebrow">00 / PROJECT LIBRARY</p><h2>制作プロジェクト</h2>
-<p class="muted">作品ごとに原本資料と模型設定を保存し、後日再編集できます。</p>
-<label for="projectSelect">保存したプロジェクト</label>
-<select id="projectSelect"><option value="">未選択（一時的な作業）</option></select>
-<div class="twocol">
-<div><label for="projectTitle">プロジェクト名</label><input id="projectTitle" maxlength="120" placeholder="例：レトロな建物、飛行機、街並み"></div>
-<div><label for="projectNotes">制作メモ</label><input id="projectNotes" maxlength="1000" placeholder="制作方針・注意事項"></div>
-</div>
-<div class="projectButtons">
-<button id="newProject" class="secondary">新規保存</button>
-<button id="saveProject" class="secondary" disabled>設定を保存</button>
-<button id="deleteProject" class="danger" disabled>削除</button>
-</div>
-<p class="muted">設計条件を変更したら「設定を保存」を押してください。</p>
-</section>
-<p class="eyebrow">01 / RESEARCH</p><h1>アイデアを、紙でかたちに。</h1>
+<div class="workContext"><span id="workContext">一時作業</span><span id="status" class="status" role="status" aria-live="polite">待機中</span></div>
+<section id="panel-design" class="tabPanel" role="tabpanel" aria-labelledby="tab-design" tabindex="0"><div class="designLayout"><section class="controls"><p class="eyebrow">IDEA & REFERENCES</p><h2>題材と資料からデザインを考える</h2>
 <p class="lead">建築物、乗り物、風景、小物、キャラクター、オリジナル作品を対象に資料調査やAIデザイン提案ができます。基本形状のA4展開図も作成できます。</p>
 <label for="subjectType">制作ジャンル</label>
 <select id="subjectType">
@@ -63,7 +31,7 @@
 <div class="inline"><input id="place" value="小さな洋館" placeholder="例：灯台、バス、城、動物、創作の建物" maxlength="120"><button id="search" class="secondary">資料検索</button></div>
 <p class="muted">名称からWikipediaの公開情報を探します。独自のデザインは資料なしで制作可能です。出典・写真や設計図の権利は別途確認してください。</p>
 <div id="research" aria-live="polite"></div>
-<div class="sectionhead"><span class="eyebrow">01B / YOUR REFERENCES</span></div>
+<div class="sectionhead"><span class="eyebrow">参考資料</span></div>
 <p class="lead">撮影写真・スケッチ・設計図・参考画像・PDF（JPEG / PNG / WebP / PDF）を追加できます。</p>
 <label for="fileSelect">資料ファイル（1件15MBまで）</label>
 <input id="fileSelect" type="file" multiple accept=".jpg,.jpeg,.png,.webp,.pdf,image/jpeg,image/png,image/webp,application/pdf">
@@ -79,13 +47,13 @@
 <button id="uploadButton" class="secondary uploadButton">選択ファイルを追加</button>
 <div id="uploaded" class="uploadlist" aria-live="polite"></div>
 <p class="muted">プロジェクト未選択時は一時保存（1時間で失効）。選択中は原本・プレビュー・設計設定を永続保存します。</p>
-<div class="sectionhead"><span class="eyebrow">PROJECT / SAVED REFERENCES</span></div>
+<div class="sectionhead"><span class="eyebrow">保存済みの資料</span></div>
 <p class="muted">プロジェクト選択中のアップロードは原本も保存されます。</p>
 <div class="inline copyControl"><label for="copyDestination">資料の複製先</label><select id="copyDestination"><option value="">複製先を選択</option></select></div>
 <div id="storedAssets" class="uploadlist" aria-live="polite"></div>
 <label class="aiConsent"><input type="checkbox" id="allowAiUploads">
 <span>資料をAI提案にも利用する（任意）<small>チェックを入れて提案すると、資料メモ・抽出テキストと最大3件の縮小画像（PDFは1ページ目）を選択中のAIへ送信します。ローカルAIの画像送信には、設定画面での有効化も必要です。</small></span></label>
-<div class="sectionhead"><span class="eyebrow">02 / DESIGN</span><button id="plan" class="secondary">AIで案を提案</button></div>
+<div class="sectionhead"><span class="eyebrow">スタイルとAI提案</span><button id="plan" class="secondary">AIで案を提案</button></div>
 <div class="stylegrid">
 <label class="style"><input type="radio" name="style" value="faithful"><span>忠実再現<small>外観の再現を優先</small></span></label>
 <label class="style"><input type="radio" name="style" value="standard" checked><span>標準デフォルメ<small>特徴を残して簡略化</small></span></label>
@@ -94,7 +62,10 @@
 <label class="style"><input type="radio" name="style" value="easy"><span>簡単組立<small>部品数を減らす</small></span></label>
 </div>
 <div id="proposals" aria-live="polite"></div>
-<div class="sectionhead"><span class="eyebrow">03 / SCALE GUIDE</span></div>
+<div class="nextStep"><p>デザインが決まったら、基本形状と寸法を指定します。</p><button type="button" data-open-tab="shape">基本形状の展開図へ進む →</button></div></section>
+<aside class="workflowGuide"><h3>作り方を選ぶ</h3><p>資料やAIでアイデアを考えたいときは、このタブを使います。AIはスタイルを提案します。</p><button type="button" class="secondary" data-open-tab="settings">使うAIを設定</button><h3>寸法がわかっている</h3><p>箱・建物・円柱などの形から、寸法を指定して直接作れます。</p><button type="button" class="secondary" data-open-tab="shape">基本形状から作る</button><h3>3Dモデルを持っている</h3><p>OBJ・STLファイルから展開図を作れます。</p><button type="button" class="secondary" data-open-tab="mesh">3Dモデルを開く</button><h3>作業を保存したい</h3><p>プロジェクトを作成・選択してから資料を追加すると、原本と設計条件を保存できます。</p><button type="button" class="secondary" data-open-tab="projects">プロジェクトを管理</button></aside></div></section>
+<section id="panel-shape" class="tabPanel" role="tabpanel" aria-labelledby="tab-shape" tabindex="0" hidden><div class="shapeLayout"><section class="controls"><p class="eyebrow">BASIC SHAPES</p><h2>寸法から展開図を作る</h2>
+<p class="lead">基本形状・縮尺・寸法を指定して生成します。AI設定や資料の登録は不要です。</p>
 <div class="twocol">
 <div><label for="scale">縮尺プリセット</label><select id="scale">
 <option value="1">1/1 実寸（工作・小物）</option>
@@ -142,11 +113,16 @@
 <div id="scaleResult" class="result" aria-live="polite"></div>
 <p class="muted">初期寸法はサンプルです。AIの提案は設計の参考で、図面の形状や寸法を自動復元する機能ではありません。</p>
 <button id="generate" class="mainbutton">この条件でA4展開図を生成</button>
-</section>
-<section class="workspace">
-<section class="meshImport panel" aria-label="OBJ/STLモデルの展開">
+</section><section class="workspace" aria-label="基本形状のプレビュー"><div class="workhead"><div><p class="eyebrow">PRINT PREVIEW</p><h2>A4実寸プレビュー</h2></div></div>
+<div class="preview"><div id="placeholder" class="placeholder"><span>▧</span><p>「展開図を生成」でプレビューを表示</p></div><img id="drawing" alt="紙模型展開図のA4プレビュー" hidden></div>
+<div class="bar"><div><button id="prev" class="secondary" disabled>前へ</button><span id="page">— / —</span><button id="next" class="secondary" disabled>次へ</button></div>
+<div><button id="saveSvg" class="secondary" disabled>SVG保存</button><button id="savePdf" disabled>PDF保存</button></div></div>
+<aside><h3>印刷と組立ガイド</h3><p>A4用紙に倍率100%で印刷し、下部の50mm基準線を定規で測ってください。「用紙サイズに合わせる」はオフにします。</p>
+<p>実線は切断、破線は折り目。窓や扉は印刷による表現です。大きなパーツは5mm重ねて貼り合わせます。</p>
+<p>この上の展開図は入力寸法から生成する基本形状です。OBJ/STLの三角面展開には「3Dモデル」タブを使ってください。紙厚補正や写真からの3D復元は未対応です。</p></aside></section></div></section>
+<section id="panel-mesh" class="tabPanel" role="tabpanel" aria-labelledby="tab-mesh" tabindex="0" hidden><section class="meshImport panel" aria-label="OBJ/STLモデルの展開">
 <div class="meshSectionTitle">
-  <div><p class="eyebrow">05 / 3D MESH UNFOLDING</p><h2>3Dモデルの展開図</h2></div>
+  <div><p class="eyebrow">3D MESH UNFOLDING</p><h2>3Dモデルの展開図</h2></div>
   <span class="status">OBJ / STL</span>
 </div>
 <p class="lead">手持ちのOBJ・STLモデルを三角形に展開し、切断線・折線・接着タブ付きのA4用紙に配置します。</p>
@@ -173,17 +149,52 @@
 </div>
 <p class="muted">展開処理はローカルサーバーで実行します。一時ジョブに原本は保管しません。制作プロジェクトへの保存を選択した場合のみ原本が残り、生成結果は1時間で失効します。非多様体メッシュや過密なメッシュは修復・簡略化してください。自動展開の組立品質は保証されません。</p>
 </section>
-
-<div class="workhead"><div><p class="eyebrow">04 / WORKSPACE</p><h2>A4実寸プレビュー</h2></div><span id="status" class="status">待機中</span></div>
-<div class="preview"><div id="placeholder" class="placeholder"><span>▧</span><p>「展開図を生成」でプレビューを表示</p></div><img id="drawing" alt="紙模型展開図のA4プレビュー" hidden></div>
-<div class="bar"><div><button id="prev" class="secondary" disabled>前へ</button><span id="page">— / —</span><button id="next" class="secondary" disabled>次へ</button></div>
-<div><button id="saveSvg" class="secondary" disabled>SVG保存</button><button id="savePdf" disabled>PDF保存</button></div></div>
-<aside><h3>印刷と組立ガイド</h3><p>A4用紙に倍率100%で印刷し、下部の50mm基準線を定規で測ってください。「用紙サイズに合わせる」はオフにします。</p>
-<p>実線は切断、破線は折り目。窓や扉は印刷による表現です。大きなパーツは5mm重ねて貼り合わせます。</p>
-<p>この上の展開図は入力寸法から生成する基本形状です。OBJ/STLの三角面展開には「3D MESH UNFOLDING」を使ってください。紙厚補正や写真からの3D復元は未対応です。</p></aside>
 </section>
+<section id="panel-projects" class="tabPanel" role="tabpanel" aria-labelledby="tab-projects" tabindex="0" hidden><section class="projectEditor" aria-label="保存済み制作プロジェクト">
+<p class="eyebrow">PROJECT LIBRARY</p><h2>プロジェクトの保存と再開</h2>
+<p class="muted">作品ごとに原本資料と模型設定を保存し、後日再編集できます。</p>
+<label for="projectSelect">保存したプロジェクト</label>
+<select id="projectSelect"><option value="">未選択（一時的な作業）</option></select>
+<div class="twocol">
+<div><label for="projectTitle">プロジェクト名</label><input id="projectTitle" maxlength="120" placeholder="例：レトロな建物、飛行機、街並み"></div>
+<div><label for="projectNotes">制作メモ</label><input id="projectNotes" maxlength="1000" placeholder="制作方針・注意事項"></div>
+</div>
+<div class="projectButtons">
+<button id="newProject" class="secondary">新規保存</button>
+<button id="saveProject" class="secondary" disabled>設定を保存</button>
+<button id="deleteProject" class="danger" disabled>削除</button>
+</div>
+<p class="muted">設計条件を変更したら「設定を保存」を押してください。</p>
+</section>
+<p class="muted">選択したプロジェクトはすべてのタブで共通です。資料の追加・編集は「資料・AI提案」タブで行います。</p><button type="button" data-open-tab="design">資料・AI提案へ戻る</button></section>
+<section id="panel-settings" class="tabPanel" role="tabpanel" aria-labelledby="tab-settings" tabindex="0" hidden><section class="aiSettings">
+<div class="settingsHeading"><h2>生成AIの設定</h2><span id="aiState" class="status">ロック中 · 定型案を使用</span></div>
+<p class="lead">プロファイルを作成・解除し、使いたいAIを選んで保存します。</p>
+<p>キーはパスフレーズで暗号化し、このブラウザのプロファイル別に保存します。解除中はAI提案時にこのサーバーを経由して選択先へ送信します。API利用料が発生する場合があります。</p>
+<p class="muted">パスフレーズは保存・復旧できません。共有端末では終了時にロックしてください。ブラウザ拡張や実行中の不正なスクリプトから解除中のキーを守ることはできません。プロファイルはログイン認証ではありません。</p>
+<fieldset id="aiControls">
+<label for="aiProfile">ユーザープロファイル</label><select id="aiProfile"></select>
+<label for="aiName">新規プロファイル名</label><input id="aiName" maxlength="80" autocomplete="off" placeholder="名前（端末内に平文で保存）">
+<label for="aiPassword">パスフレーズ（作成時は12文字以上）</label><input id="aiPassword" type="password" autocomplete="off" maxlength="256">
+<div class="projectButtons"><button id="aiCreate" type="button" class="secondary">新規作成</button><button id="aiUnlock" type="button">解除</button><button id="aiLock" type="button" class="secondary">ロック</button><button id="aiDelete" type="button" class="danger">削除</button></div>
+<fieldset id="aiEditor" disabled>
+<legend>プロファイルのAI設定</legend>
+<label for="aiProvider">プロバイダー</label><select id="aiProvider"><option value="none">使わない（定型案）</option><option value="openai">OpenAI</option><option value="gemini">Gemini</option><option value="anthropic">Anthropic</option><option value="ollama">Ollama（ローカル）</option><option value="local_openai">OpenAI互換（ローカル / LM Studio等）</option></select>
+<label for="aiModel">モデルID（利用可能なIDを入力）</label><input id="aiModel" maxlength="200" autocomplete="off" spellcheck="false">
+<div id="aiLocal" hidden>
+<label for="aiEndpoint">ローカルLLMの接続先URL</label><input id="aiEndpoint" type="url" maxlength="2048" autocomplete="off" spellcheck="false">
+<p class="muted">アプリサーバーから接続します。同じPCなら localhost、Docker利用時は host.docker.internal を指定してください。別PC上のアプリから、ブラウザ側PCのlocalhostには接続できません。</p>
+<label class="localVision" for="aiVision"><input id="aiVision" type="checkbox">画像対応モデルとして資料画像を送信する</label>
+<p class="muted">通常はテキストのみ。画像を送るには、資料欄のAI参照許可も必要です。接続先が許可されていない場合はREADMEの設定を確認してください。</p>
+</div>
+<label id="aiKeyHint" for="aiKey">APIキー（空欄なら選択先の保存済みキーを維持）</label><input id="aiKey" type="password" maxlength="512" autocomplete="off" spellcheck="false">
+<button id="aiSave" type="button">暗号化して保存・使用</button>
+<p class="muted">保存後の設定をAI提案に使用します。プロバイダーごとのモデルとキーを保持します。</p>
+</fieldset></fieldset><p id="aiMessage" role="status" aria-live="polite"></p>
+</section></section>
 </main>
 <footer>AI Paper Modelar · 汎用ペーパークラフト試作版 · 参考資料の使用条件をご確認ください。</footer>
+<script defer src="/static/tabs.js"></script>
 <script defer src="/static/ai-vault.js"></script>
 <script defer src="/static/ai-settings.js"></script>
 <script defer src="/static/app.js"></script>
