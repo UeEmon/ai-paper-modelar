@@ -42,3 +42,5 @@ button.danger{border:1px solid #be6d6a;color:#8c3330;background:white}
 .meshControls{display:flex;flex-wrap:wrap;gap:7px;align-items:center;justify-content:center;margin-top:10px}
 .meshControls button{padding:8px 10px}
 .meshResults .warning{color:#805e18}
+
+.aiSettings{grid-column:1/-1;background:#fff;border:1px solid #ccc;border-radius:12px;padding:20px;margin-bottom:20px}.aiSettings summary{cursor:pointer;font-weight:bold}.aiSettings summary span{font-size:.85em;font-weight:normal;margin-left:16px}.aiSettings fieldset{border:1px solid #ddd;margin-top:12px;padding:12px;min-width:0}.aiSettings input,.aiSettings select{max-width:100%}

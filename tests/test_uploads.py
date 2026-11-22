@@ -116,21 +116,19 @@ def test_uploaded_media_requires_explicit_ai_consent(monkeypatch):
     def fake_client(**kwargs):
         return original_client(transport=httpx.MockTransport(handler), **kwargs)
 
-    monkeypatch.setenv("AI_PROVIDER", "openai")
-    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
     monkeypatch.setattr(ai.httpx, "AsyncClient", fake_client)
     try:
         no_consent = ai.ProposalRequest(
             place="旧駅舎", upload_ids=[asset.id], include_uploads=False
         )
-        result = asyncio.run(ai.proposals(no_consent))
+        result = asyncio.run(ai.proposals(no_consent, ai.AICredentials("openai", "test-model", "test-key")))
         assert result["analyzed_uploads"] == 0
         assert "input_image" not in json.dumps(sent[-1])
 
         consent = ai.ProposalRequest(
             place="旧駅舎", upload_ids=[asset.id], include_uploads=True
         )
-        result = asyncio.run(ai.proposals(consent))
+        result = asyncio.run(ai.proposals(consent, ai.AICredentials("openai", "test-model", "test-key")))
         assert result["analyzed_uploads"] == 1
         assert "input_image" in json.dumps(sent[-1])
         assert "station.png" in json.dumps(sent[-1])

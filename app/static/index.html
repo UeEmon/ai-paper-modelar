@@ -5,6 +5,24 @@
 <body>
 <header><div class="brand">▣ <span>AI PAPER MODELAR<small>AIでアイデアと参考資料から紙模型をデザイン</small></span></div><div class="version">MVP 0.5</div></header>
 <main>
+<details class="aiSettings">
+<summary>生成AIの設定 <span id="aiState">ロック中 · 定型案を使用</span></summary>
+<p>キーはパスフレーズで暗号化し、このブラウザのプロファイル別に保存します。解除中はAI提案時にこのサーバーを経由して選択先へ送信します。API利用料が発生する場合があります。</p>
+<p class="muted">パスフレーズは保存・復旧できません。共有端末では終了時にロックしてください。ブラウザ拡張や実行中の不正なスクリプトから解除中のキーを守ることはできません。プロファイルはログイン認証ではありません。</p>
+<fieldset id="aiControls">
+<label for="aiProfile">ユーザープロファイル</label><select id="aiProfile"></select>
+<label for="aiName">新規プロファイル名</label><input id="aiName" maxlength="80" autocomplete="off" placeholder="名前（端末内に平文で保存）">
+<label for="aiPassword">パスフレーズ（作成時は12文字以上）</label><input id="aiPassword" type="password" autocomplete="off" maxlength="256">
+<div class="projectButtons"><button id="aiCreate" type="button" class="secondary">新規作成</button><button id="aiUnlock" type="button">解除</button><button id="aiLock" type="button" class="secondary">ロック</button><button id="aiDelete" type="button" class="danger">削除</button></div>
+<fieldset id="aiEditor" disabled>
+<legend>プロファイルのAI設定</legend>
+<label for="aiProvider">プロバイダー</label><select id="aiProvider"><option value="none">使わない（定型案）</option><option value="openai">OpenAI</option><option value="gemini">Gemini</option><option value="anthropic">Anthropic</option></select>
+<label for="aiModel">モデルID（利用可能なIDを入力）</label><input id="aiModel" maxlength="120" autocomplete="off" spellcheck="false">
+<label for="aiKey">APIキー（空欄なら選択先の保存済みキーを維持）</label><input id="aiKey" type="password" maxlength="512" autocomplete="off" spellcheck="false">
+<button id="aiSave" type="button">暗号化して保存・使用</button>
+<p class="muted">保存後の設定をAI提案に使用します。プロバイダーごとのモデルとキーを保持します。</p>
+</fieldset></fieldset><p id="aiMessage" role="status" aria-live="polite"></p>
+</details>
 <section class="controls">
 <section class="projectEditor" aria-label="保存済み制作プロジェクト">
 <p class="eyebrow">00 / PROJECT LIBRARY</p><h2>制作プロジェクト</h2>
@@ -160,6 +178,8 @@
 </section>
 </main>
 <footer>AI Paper Modelar · 汎用ペーパークラフト試作版 · 参考資料の使用条件をご確認ください。</footer>
+<script defer src="/static/ai-vault.js"></script>
+<script defer src="/static/ai-settings.js"></script>
 <script defer src="/static/app.js"></script>
 <script defer src="/static/projects.js"></script>
 <script defer src="/static/mesh.js"></script>

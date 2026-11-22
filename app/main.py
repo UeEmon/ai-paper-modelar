@@ -10,7 +10,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
 
-from .ai import ProposalRequest, proposals
+from .ai import ProposalRequest, proposals, credentials_from_headers
 from .generator import ModelSpec, render_pdf, render_svg, summary
 from .research import research
 from .senrolab import router as senrolab_router
@@ -26,11 +26,29 @@ app.include_router(mesh_router)
 app.include_router(project_router)
 
 
+@app.middleware("http")
+async def security_headers(request: Request, call_next):
+    response = await call_next(request)
+    if request.url.path == "/":
+        response.headers["Content-Security-Policy"] = (
+            "default-src 'self'; script-src 'self'; style-src 'self'; "
+            "img-src 'self' blob: data:; connect-src 'self'; object-src 'none'; "
+            "base-uri 'none'; frame-ancestors 'none'; form-action 'self'"
+        )
+    response.headers["Referrer-Policy"] = "no-referrer"
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    if request.url.path == "/api/proposals":
+        response.headers["Cache-Control"] = "no-store"
+    return response
+
+
 # SenroLab 向けの /v1/ は、エラーを {"error": "日本語のメッセージ"} で返す（docs/senrolab/openapi.yaml）
 @app.exception_handler(RequestValidationError)
 async def validation_error(request: Request, exc: RequestValidationError):
     if request.url.path.startswith("/v1/"):
         return JSONResponse({"error": "入力が正しくありません"}, status_code=400)
+    if request.url.path == "/api/proposals":
+        return JSONResponse({"detail": "提案の入力値を確認してください。"}, status_code=422)
     return await request_validation_exception_handler(request, exc)
 
 
@@ -60,9 +78,13 @@ async def find(q: str = Query(min_length=2, max_length=120)):
         raise HTTPException(status_code=503, detail="公開資料を取得できませんでした") from exc
 
 @app.post("/api/proposals")
-async def plan(req: ProposalRequest):
+async def plan(req: ProposalRequest, request: Request):
     try:
-        return await proposals(req)
+        credentials = credentials_from_headers(request.headers)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="AI設定を確認してください。") from None
+    try:
+        return JSONResponse(await proposals(req, credentials), headers={"Cache-Control": "no-store"})
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc.args[0])) from exc
     except LibraryProblem as exc:

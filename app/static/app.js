@@ -186,7 +186,7 @@ function sizes(){
     "人物170cm： "+mm(1.7)+" mm　／　扉2m： "+mm(2)+" mm";
 }
 async function post(url,value){
-  const r=await fetch(url,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(value)});
+  const r=await fetch(url,{method:"POST",headers:{"Content-Type":"application/json",...(url==="/api/proposals"?window.paperAI.headers():{})},cache:"no-store",redirect:"error",body:JSON.stringify(value)});
   if(!r.ok){const d=await r.json().catch(()=>({}));throw Error(typeof d.detail==="string"?d.detail:"入力値または通信を確認してください");}
   return r;
 }
