@@ -49,3 +49,47 @@ def test_gable_triangles_match_roof_slope():
     rake = hypot(pts[2][0] - pts[1][0], pts[2][1] - pts[1][1])
     assert abs(rake - (d / 2) / cos(radians(30))) < 1e-6
     assert abs(parts["Roof A"]["w"] - 10 - w) < 1e-6
+
+
+def test_general_papercraft_box_template_and_real_scale():
+    from app.generator import build_parts
+    spec = ModelSpec(
+        name="Handmade prop",
+        subject_type="prop",
+        template="box",
+        input_unit="cm",
+        scale=1,
+        width_m=0.08,
+        depth_m=0.04,
+        height_m=0.06,
+        roof="flat",
+        pitch_deg=0,
+    )
+    parts = build_parts(spec)
+    assert len(parts) == 6
+    assert [p["name"] for p in parts][-2:] == ["Top face", "Bottom face"]
+    assert all("window" not in p["name"].lower() for p in parts)
+    dimensions = summary(spec)
+    assert dimensions["size_mm"]["width"] == 80
+    assert dimensions["size_mm"]["total_height"] == 60
+    assert dimensions["subject_type"] == "prop"
+    assert dimensions["template"] == "box"
+    assert render_pdf(spec).startswith(b"%PDF-")
+    assert "<svg" in render_svg(spec)
+
+
+def test_legacy_model_defaults_unchanged():
+    spec = ModelSpec(name="Railway depot", scale=150)
+    assert spec.subject_type == "architecture"
+    assert spec.template == "building"
+    assert spec.input_unit == "m"
+    assert any(part["name"] == "Roof A" for part in __import__(
+        "app.generator", fromlist=["build_parts"]
+    ).build_parts(spec))
+
+
+def test_generic_categories_and_custom_scales():
+    for subject in ["architecture","vehicle","landscape","prop",
+                    "character","original","railway","other"]:
+        spec = ModelSpec(subject_type=subject, template="box", scale=12)
+        assert summary(spec)["subject_type"] == subject

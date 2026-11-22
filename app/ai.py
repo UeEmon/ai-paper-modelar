@@ -14,7 +14,7 @@ from .projects import get_asset_for_ai
 class ProposalRequest(BaseModel):
     place: str = Field(min_length=2, max_length=120)
     scale: int = Field(default=150, ge=1, le=500)
-    subject_type: Literal["architecture", "vehicle", "landscape", "prop", "character", "original", "other"] = "architecture"
+    subject_type: Literal["architecture", "vehicle", "landscape", "prop", "character", "original", "railway", "other"] = "architecture"
     style: Literal["faithful", "standard", "anime", "retro", "easy"] = "standard"
     sources: list[dict] = Field(default_factory=list, max_length=8)
     upload_ids: list[str] = Field(default_factory=list, max_length=8)

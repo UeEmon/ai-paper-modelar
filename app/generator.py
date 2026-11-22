@@ -17,7 +17,7 @@ AREA_X, AREA_Y, AREA_W, AREA_H, OVERLAP = 12.0, 28.0, 186.0, 225.0, 5.0
 
 Style = Literal["faithful", "standard", "anime", "retro", "easy"]
 Roof = Literal["gable", "flat"]
-SubjectType = Literal["architecture", "vehicle", "landscape", "prop", "character", "original", "other"]
+SubjectType = Literal["architecture", "vehicle", "landscape", "prop", "character", "original", "railway", "other"]
 Template = Literal["building", "box"]
 InputUnit = Literal["m", "cm", "mm"]
 
