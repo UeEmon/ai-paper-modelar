@@ -14,6 +14,7 @@ from .ai import ProposalRequest, proposals
 from .generator import ModelSpec, render_pdf, render_svg, summary
 from .research import research
 from .senrolab import router as senrolab_router
+from .mesh_routes import router as mesh_router
 from .project_routes import router as project_router
 from .projects import LibraryProblem
 from .uploads import add_asset, get_asset, delete_asset, UploadProblem, MAX_FILE_BYTES
@@ -21,6 +22,7 @@ from .uploads import add_asset, get_asset, delete_asset, UploadProblem, MAX_FILE
 HERE = Path(__file__).resolve().parent
 app = FastAPI(title="AI Paper Modelar", version="0.1.0")
 app.include_router(senrolab_router)
+app.include_router(mesh_router)
 app.include_router(project_router)
 
 
