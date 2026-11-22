@@ -408,3 +408,37 @@ def unfold(mesh: Mesh, *, unit: str = "mm", scale: int = 1,
         },
         warnings=warnings,
     )
+
+
+def thumbnail(mesh: Mesh) -> bytes:
+    """Small isometric diagnostic preview, not a faithful rendered material."""
+    from io import BytesIO
+    from PIL import Image, ImageDraw
+
+    width, height = 360, 260
+    image = Image.new("RGB", (width, height), "#fcfcf9")
+    painter = ImageDraw.Draw(image)
+    coords = []
+    for x, y, z in mesh.vertices:
+        coords.append((x - y, (x + y) * 0.43 - z * 1.20))
+    lo_x, hi_x = min(p[0] for p in coords), max(p[0] for p in coords)
+    lo_y, hi_y = min(p[1] for p in coords), max(p[1] for p in coords)
+    scale = min(300 / max(1e-9, hi_x - lo_x),
+                205 / max(1e-9, hi_y - lo_y))
+    midx = (hi_x + lo_x) / 2
+    midy = (hi_y + lo_y) / 2
+    drawing = [
+        (180 + (x - midx) * scale, 123 + (y - midy) * scale)
+        for x, y in coords
+    ]
+    depth = lambda face: sum(
+        mesh.vertices[i][0] + mesh.vertices[i][1] + mesh.vertices[i][2]
+        for i in face) / 3
+    for face in sorted(mesh.faces, key=depth):
+        painter.polygon([drawing[i] for i in face],
+                        fill="#e7dfce", outline="#4b675d", width=1)
+    painter.text((12, 236), mesh.source + "  /  " + str(len(mesh.faces)) +
+                 " triangles", fill="#344b42")
+    out = BytesIO()
+    image.save(out, format="JPEG", quality=82)
+    return out.getvalue()
