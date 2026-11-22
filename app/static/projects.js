@@ -1,5 +1,5 @@
 "use strict";
-/* Persistent single-user project library. Main editor helpers come from app.js. */
+/* RAM-only temporary work sessions. Main editor helpers come from app.js. */
 const paperLibrary = {
   projectId: null,
   assets: [],
@@ -27,7 +27,7 @@ const paperLibrary = {
       }
       el("fileSelect").value="";
       await this.refresh(this.projectId);
-      status(count+"件をプロジェクトへ永続保存しました");
+      status(count+"件をプロジェクトへ一時作業へ追加しました");
     }catch(error){status("資料を保存できませんでした");window.alert(error.message);}
     finally{el("uploadButton").disabled=false;}
   },
@@ -148,7 +148,7 @@ const paperLibrary = {
   },
   async remove(){
     if(!this.projectId)return;
-    if(!window.confirm("「"+el("projectTitle").value+"」と保存された原本を完全に削除しますか？"))return;
+    if(!window.confirm("「"+el("projectTitle").value+"」と一時資料を削除しますか？"))return;
     try{
       await this.request(this.url(),{method:"DELETE"});
       this.projectId=null;
@@ -161,7 +161,7 @@ const paperLibrary = {
   render(){
     const panel=el("storedAssets");panel.replaceChildren();
     if(!this.projectId){
-      text(panel,"p","プロジェクトを作成・選択すると、写真と設計図を継続保存できます。","muted");
+      text(panel,"p","プロジェクトを作成・選択すると、写真と設計図を一時的に参照できます。サーバー再起動や操作終了後15分で消去します。","muted");
       return;
     }
     if(!this.assets.length){

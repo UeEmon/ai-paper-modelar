@@ -22,11 +22,17 @@ from .projects import LibraryProblem
 from .uploads import add_asset, get_asset, delete_asset, UploadProblem, MAX_FILE_BYTES
 
 HERE = Path(__file__).resolve().parent
-app = FastAPI(title="AI Paper Modelar", version="0.1.0")
+from .retention import lifespan, MemoryBodyLimit, router as output_router, save_output
+
+app = FastAPI(title="AI Paper Modelar", version="0.1.0", lifespan=lifespan)
+app.add_middleware(MemoryBodyLimit)
+app.include_router(output_router)
 app.include_router(senrolab_router)
 app.include_router(mesh_router)
 app.include_router(project_router)
 app.include_router(image_model_router)
+from .external_3d import router as external_3d_router
+app.include_router(external_3d_router)
 
 
 @app.middleware("http")
@@ -40,7 +46,7 @@ async def security_headers(request: Request, call_next):
         )
     response.headers["Referrer-Policy"] = "no-referrer"
     response.headers["X-Content-Type-Options"] = "nosniff"
-    if request.url.path in {"/api/proposals", "/api/ai/test", "/api/ai/models"} or request.url.path.startswith("/api/image-model/"):
+    if request.url.path.startswith("/api/"):
         response.headers["Cache-Control"] = "no-store"
     return response
 
@@ -50,7 +56,7 @@ async def security_headers(request: Request, call_next):
 async def validation_error(request: Request, exc: RequestValidationError):
     if request.url.path.startswith("/v1/"):
         return JSONResponse({"error": "入力が正しくありません"}, status_code=400)
-    if request.url.path in {"/api/proposals", "/api/ai/test", "/api/ai/models"} or request.url.path.startswith("/api/image-model/"):
+    if request.url.path.startswith("/api/"):
         return JSONResponse({"detail": "入力値を確認してください。"}, status_code=422)
     return await request_validation_exception_handler(request, exc)
 
@@ -107,7 +113,10 @@ async def test_ai_connection(request: Request):
             raise ValueError("Missing credentials")
     except ValueError:
         return JSONResponse({"ok": False, "message": "AI設定を確認してください。接続先はサーバーの許可URLに限られます。"}, status_code=400)
-    code, result = await check_connection(credentials)
+    mode = request.headers.get("x-ai-test-mode", "text")
+    if mode not in {"text", "image"}:
+        return JSONResponse({"ok": False, "message": "接続テストの方式を確認してください。"}, status_code=400)
+    code, result = await check_connection(credentials, vision_test=mode == "image")
     return JSONResponse(result, status_code=code)
 
 
@@ -137,6 +146,7 @@ def svg(req: ModelSpec, page: int = Query(default=0, ge=0)):
         rendered = render_svg(req, page)
     except (IndexError, ValueError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
+    save_output(rendered, "svg")
     return Response(rendered, media_type="image/svg+xml")
 
 @app.post("/api/template.pdf")
@@ -145,6 +155,7 @@ def pdf(req: ModelSpec):
         rendered = render_pdf(req)
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
+    save_output(rendered, "pdf")
     return Response(rendered, media_type="application/pdf",
         headers={"Content-Disposition": 'attachment; filename="paper-model.pdf"'})
 

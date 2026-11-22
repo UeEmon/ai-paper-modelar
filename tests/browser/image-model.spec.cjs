@@ -30,7 +30,7 @@ test('search photo, consent, generate preview, save OBJ and unfold through the r
   await expect(page.locator('#imageCandidates')).toContainText('CC BY-SA 4.0');
   await expect(page.locator('#imageGenerate')).toBeDisabled();
   await page.locator('#imageHeight').fill('100');await page.locator('#imageConsent').check();await page.locator('#imageGenerate').click();
-  await expect(page.locator('#imageMessage')).toContainText('簡易3Dを生成しました');
+  await expect(page.locator('#imageMessage')).toContainText('3Dを生成しました');
   expect(sent).toMatchObject({image_id:photo.id,height_mm:100,consent:true});
   expect(JSON.stringify(sent)).not.toContain('test-image-key');
   await expect(page.locator('#imageModelInfo')).toContainText('12三角形');

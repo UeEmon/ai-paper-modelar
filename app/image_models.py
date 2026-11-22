@@ -21,7 +21,7 @@ from .uploads import _prepare_image, UploadProblem, MAX_PIXELS
 
 router=APIRouter(prefix="/api/image-model",tags=["image-to-3d"])
 COMMONS_API="https://commons.wikimedia.org/w/api.php"
-TTL=3600
+TTL=900
 MAX_IMAGES=24
 MAX_IMAGE_BYTES=4*1024*1024
 
@@ -41,7 +41,7 @@ _images: dict[str,ImageChoice]={}
 def prune():
     now=time.time()
     for key,item in list(_images.items()):
-        if now-item.created>TTL:del _images[key]
+        if now-item.created>TTL:_images.pop(key,None)
 
 
 def choice(image_id):
@@ -102,8 +102,8 @@ async def preview(item):
                 if len(data)>MAX_IMAGE_BYTES:raise ValueError("Image is too large")
     with Image.open(io.BytesIO(data)) as img:
         if img.width*img.height>MAX_PIXELS:raise ValueError("Image dimensions too large")
-    item.preview,_=_prepare_image(bytes(data))
-    return item.preview
+    jpeg,_=_prepare_image(bytes(data))
+    return jpeg
 
 
 @router.get("/images")

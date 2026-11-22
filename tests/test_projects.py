@@ -1,4 +1,4 @@
-"""Persistent project library integration tests."""
+"""RAM-only work-session integration tests."""
 from io import BytesIO
 from PIL import Image
 import pytest
@@ -21,14 +21,14 @@ def new_project(name):
     assert r.status_code==201,r.text
     return r.json()["id"]
 
-def test_projects_persist_and_edit():
+def test_work_sessions_edit_and_delete():
     pid=new_project("駅舎A")
     r=client.patch("/api/projects/"+pid,json={
         "name":"駅舎B","notes":"縮尺の確認済み",
         "model_spec":{"name":"駅舎B","scale":80,"width_m":12}
     })
     assert r.status_code==200,r.text
-    # Each request reopens the SQLite DB; a new TestClient can read it again.
+    # A second client in the same process can use the unexpired work session.
     x=TestClient(app).get("/api/projects/"+pid).json()
     assert x["project"]["name"]=="駅舎B"
     assert x["project"]["model_spec"]["scale"]==80
@@ -98,7 +98,7 @@ def test_no_external_media_without_consent(monkeypatch):
     assert "input_image" in json.dumps(sent[-1])
 
 
-def test_saved_generic_project_settings_persist():
+def test_generic_settings_remain_in_active_work_session():
     pid = new_project("Vintage bus")
     data = {
         "name": "Vintage bus",

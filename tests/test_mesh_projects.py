@@ -1,4 +1,4 @@
-"""Saved OBJ/STL original and project asset integration."""
+"""Temporary OBJ/STL work-session integration."""
 from io import BytesIO
 import pytest
 from fastapi.testclient import TestClient

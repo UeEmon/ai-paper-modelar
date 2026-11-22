@@ -28,7 +28,7 @@ test('failed and empty catalogues preserve custom IDs and manual entry',async({p
   await setup(page);await page.locator('#aiModel').fill('my-custom-model');
   await page.locator('#aiModels').click();await expect(page.locator('#aiModelsMessage')).toContainText('閲覧権限');
   await expect(page.locator('#aiModel')).toHaveValue('my-custom-model');
-  empty=true;await page.locator('#aiModels').click();await expect(page.locator('#aiModelsMessage')).toContainText('モデルが見つかりません');
+  empty=true;await page.locator('#aiModels').click();await expect(page.locator('#aiModelsMessage')).toContainText('能力を確認できるモデルがありません');
   await expect(page.locator('#aiModel')).toHaveValue('my-custom-model');await page.locator('#aiModel').fill('manual-model');
 });
 test('provider, endpoint and key changes clear prior catalogues and old responses',async({page})=>{

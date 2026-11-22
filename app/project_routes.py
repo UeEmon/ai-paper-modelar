@@ -1,6 +1,7 @@
 """Project REST endpoints; local single-user API (not Internet-facing)."""
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
-from fastapi.responses import FileResponse, Response
+from fastapi.responses import Response
+from urllib.parse import quote
 
 from .projects import (
     AssetCopy, AssetPatch, LibraryProblem, ProjectCreate, ProjectPatch,
@@ -98,10 +99,10 @@ def reuse_asset(project_id: str, asset_id: str, data: AssetCopy):
 @router.get("/{project_id}/assets/{asset_id}/preview")
 def preview(project_id: str, asset_id: str):
     try:
-        path, _ = get_asset_file(project_id, asset_id, preview=True)
+        content, _ = get_asset_file(project_id, asset_id, preview=True)
     except LibraryProblem as exc:
         raise _problem(exc) from exc
-    return FileResponse(path, media_type="image/jpeg", headers={
+    return Response(content, media_type="image/jpeg", headers={
         "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff",
     })
 
@@ -109,9 +110,9 @@ def preview(project_id: str, asset_id: str):
 @router.get("/{project_id}/assets/{asset_id}/original")
 def original(project_id: str, asset_id: str):
     try:
-        path, meta = get_asset_file(project_id, asset_id, preview=False)
+        content, meta = get_asset_file(project_id, asset_id, preview=False)
     except LibraryProblem as exc:
         raise _problem(exc) from exc
-    return FileResponse(path, filename=meta["name"],
+    return Response(content,
         media_type="application/octet-stream",
-        headers={"Cache-Control": "no-store", "X-Content-Type-Options": "nosniff"})
+        headers={"Content-Disposition": "attachment; filename*=UTF-8''" + quote(meta["name"], safe=""), "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff"})

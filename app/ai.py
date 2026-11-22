@@ -1,6 +1,8 @@
 """Text design proposals with optional image/PDF reference input and user consent."""
 import asyncio
 import base64
+import io
+import secrets
 import json
 import re
 import os
@@ -10,8 +12,10 @@ from dataclasses import dataclass, field
 from typing import Literal
 
 import httpx
+from PIL import Image
 from pydantic import BaseModel, Field, ConfigDict
 
+from .model_capabilities import image_scene_candidate
 from .generator import ModelSpec, Template
 from .uploads import get_asset
 from .projects import get_asset_for_ai
@@ -384,49 +388,88 @@ async def proposals(req: ProposalRequest, credentials: AICredentials | None = No
         return answer
 
 
-async def check_connection(credentials: AICredentials):
-    """A minimal generation validates the selected model without sending user material."""
+def vision_probe():
+    palette = {"RED": (255, 0, 0), "GREEN": (0, 200, 0),
+               "BLUE": (0, 0, 255), "YELLOW": (255, 220, 0)}
+    left = secrets.choice(list(palette))
+    right = secrets.choice([name for name in palette if name != left])
+    with Image.new("RGB", (128, 64), palette[left]) as image:
+        image.paste(palette[right], (64, 0, 128, 64))
+        out = io.BytesIO()
+        image.save(out, format="JPEG", quality=95)
+    return base64.b64encode(out.getvalue()).decode("ascii"), (left, right)
+
+
+async def check_connection(credentials: AICredentials, vision_test: bool = False):
+    """Test text or read a synthetic image; user material is never sent."""
     provider, model, key = credentials.provider, credentials.model, credentials.api_key
     local = provider in LOCAL_PROVIDERS
     endpoint = local_endpoint(credentials.endpoint) if local else ""
+    image, expected_colors = vision_probe() if vision_test else (None, None)
+    prompt = ("Identify the color of the LEFT half and RIGHT half of the attached image. "
+              "Reply with exactly two English color words in left-to-right order, choosing "
+              "from RED GREEN BLUE YELLOW. Do not guess without reading the image.") if vision_test else "Reply OK."
     try:
-        timeout = 60 if local else 20
+        timeout = (120 if local else 40) if vision_test else (60 if local else 20)
         async with asyncio.timeout(timeout), httpx.AsyncClient(
                 timeout=timeout, trust_env=not local, follow_redirects=False) as client:
             if provider == "openai":
+                content = [{"type": "input_text", "text": prompt},
+                           {"type": "input_image", "image_url": "data:image/jpeg;base64," + image}] if vision_test else prompt
                 response = await client.post("https://api.openai.com/v1/responses",
                     headers={"Authorization": "Bearer " + key},
-                    json={"model": model, "input": "Reply OK.", "max_output_tokens": 32, "store": False})
+                    json={"model": model, "input": [{"role": "user", "content": content}] if vision_test else prompt,
+                          "max_output_tokens": 1024 if vision_test else 32, "store": False})
                 expected = "output"
             elif provider == "gemini":
+                parts = [{"text": prompt}]
+                if vision_test: parts.append({"inline_data": {"mime_type": "image/jpeg", "data": image}})
                 response = await client.post(
                     "https://generativelanguage.googleapis.com/v1beta/models/" + model + ":generateContent",
                     headers={"x-goog-api-key": key},
-                    json={"contents": [{"parts": [{"text": "Reply OK."}]}],
-                          "generationConfig": {"maxOutputTokens": 8}})
+                    json={"contents": [{"parts": parts}],
+                          "generationConfig": {"maxOutputTokens": 1024 if vision_test else 8}})
                 expected = "candidates"
             elif provider == "anthropic":
+                content = [{"type": "text", "text": prompt}, {"type": "image", "source": {
+                    "type": "base64", "media_type": "image/jpeg", "data": image}}] if vision_test else prompt
                 response = await client.post("https://api.anthropic.com/v1/messages",
                     headers={"x-api-key": key, "anthropic-version": "2023-06-01"},
-                    json={"model": model, "max_tokens": 8,
-                          "messages": [{"role": "user", "content": "Reply OK."}]})
+                    json={"model": model, "max_tokens": 1024 if vision_test else 8,
+                          "messages": [{"role": "user", "content": content}]})
                 expected = "content"
             else:
                 auth = {"Authorization": "Bearer " + key} if key else {}
-                body = {"model": model, "stream": False,
-                        "messages": [{"role": "user", "content": "Reply OK."}]}
+                user = {"role": "user", "content": prompt}
+                body = {"model": model, "stream": False, "messages": [user]}
                 if provider == "ollama":
-                    body["options"] = {"num_predict": 8}
+                    body["options"] = {"num_predict": 64 if vision_test else 8}
+                    if vision_test:
+                        user["images"] = [image]
+                        body["think"] = False
                     url, expected = endpoint + "/api/chat", "message"
                 else:
-                    body["max_tokens"] = 8
+                    body["max_tokens"] = 1024 if vision_test else 8
+                    if vision_test: user["content"] = [{"type": "text", "text": prompt},
+                        {"type": "image_url", "image_url": {"url": "data:image/jpeg;base64," + image}}]
                     url, expected = endpoint + "/chat/completions", "choices"
                 response = await client.post(url, headers=auth, json=body)
             response.raise_for_status()
             data = response.json()
             if not isinstance(data, dict) or not isinstance(data.get(expected), (list, dict)):
                 raise ValueError("Unexpected response")
-        return 200, {"ok": True, "message": "接続テストに成功しました。", **({"endpoint": endpoint} if local else {})}
+            if vision_test:
+                if provider == "openai": raw = " ".join(c.get("text", "") for item in data["output"] for c in item.get("content", []) if c.get("type") == "output_text")
+                elif provider == "gemini": raw = " ".join(p.get("text", "") for c in data["candidates"] for p in c.get("content", {}).get("parts", []))
+                elif provider == "anthropic": raw = " ".join(c.get("text", "") for c in data["content"] if c.get("type") == "text")
+                elif provider == "ollama": raw = data["message"]["content"]
+                else: raw = data["choices"][0]["message"]["content"]
+                colors = re.findall(r"\b(?:RED|GREEN|BLUE|YELLOW)\b", raw.upper())
+                if tuple(colors) != expected_colors:
+                    return 422, {"ok": False, "vision_tested": False, "message": "画像の内容を正しく確認できませんでした。画像対応モデルと画像入力の設定を確認してください。"}
+        return 200, {"ok": True, "vision_tested": vision_test,
+                     "message": "画像入力と色の認識テストに成功しました。" if vision_test else "接続テストに成功しました。",
+                     **({"endpoint": endpoint} if local else {})}
     except httpx.HTTPStatusError as exc:
         status = exc.response.status_code
         if status in {401, 403}:
@@ -440,7 +483,7 @@ async def check_connection(credentials: AICredentials):
         return 400, {"ok": False, "message": message}
     except (httpx.TimeoutException, TimeoutError):
         return 504, {"ok": False, "message": "接続テストが時間切れになりました。ローカルモデルの読み込みやサーバーの状態を確認してください。"}
-    except (httpx.HTTPError, ValueError, TypeError, KeyError):
+    except (httpx.HTTPError, ValueError, TypeError, KeyError, IndexError, AttributeError):
         return 502, {"ok": False, "message": "接続または応答の確認に失敗しました。接続先とAIサーバーの起動状態を確認してください。"}
 
 
@@ -462,7 +505,7 @@ async def available_models(credentials: AICredentials):
         params = {"limit": 1000}
     else:
         url, field_name = (endpoint + "/api/tags", "models") if provider == "ollama" else (endpoint + "/models", "data")
-    models, cursors, truncated = {}, set(), False
+    models, metadata, cursors, truncated = {}, {}, set(), False
     pattern = r"[A-Za-z0-9][A-Za-z0-9._:/-]{0,199}" if local else r"[A-Za-z0-9][A-Za-z0-9._:-]{0,119}"
     try:
         async with asyncio.timeout(20), httpx.AsyncClient(timeout=20, trust_env=not local, follow_redirects=False) as client:
@@ -484,6 +527,7 @@ async def available_models(credentials: AICredentials):
                         model_id = (item.get("name") or item.get("model")) if provider == "ollama" else item.get("id")
                     if not isinstance(model_id, str) or not re.fullmatch(pattern, model_id) or (key and key in model_id):
                         continue
+                    metadata[model_id] = item
                     label = item.get("display_name") or item.get("displayName") or model_id
                     label = label if isinstance(label, str) else model_id
                     models[model_id] = {"id": model_id, "name": (label.replace(key, "[redacted]") if key else label)[:180]}
@@ -503,6 +547,37 @@ async def available_models(credentials: AICredentials):
                 params["pageToken" if provider == "gemini" else "after_id"] = cursor
                 if page == 4:
                     truncated = True
+            if provider == "ollama":
+                # Metadata reads only: never load/pull a model or run inference here.
+                semaphore = asyncio.Semaphore(4)
+                async def details(model_id):
+                    async with semaphore:
+                        try:
+                            detail = await client.post(endpoint + "/api/show", headers=auth,
+                                                       json={"model": model_id}, timeout=5)
+                            detail.raise_for_status()
+                            body = detail.json()
+                            return model_id, body if isinstance(body, dict) else {}
+                        except (httpx.HTTPError, ValueError):
+                            return model_id, {}
+                ids = list(models)[:100]
+                if len(models) > len(ids): truncated = True
+                metadata = dict(await asyncio.gather(*(details(mid) for mid in ids)))
+            elif provider == "local_openai" and any(item.get("type") is None for item in metadata.values()):
+                # LM Studio's same-origin metadata endpoint supplements /v1/models.
+                # Only intersect IDs already returned by the configured /models API.
+                if endpoint.endswith("/v1"):
+                    try:
+                        detail = await client.get(endpoint[:-3] + "/api/v0/models", headers=auth, timeout=5)
+                        detail.raise_for_status()
+                        body = detail.json()
+                        for item in body.get("data", []) if isinstance(body, dict) else []:
+                            if isinstance(item, dict) and item.get("id") in metadata:
+                                metadata[item["id"]] = item
+                    except (httpx.HTTPError, ValueError, TypeError):
+                        pass
+            models = {mid: item for mid, item in models.items()
+                      if image_scene_candidate(provider, mid, metadata.get(mid, {}))}
         return 200, {"ok": True, "models": sorted(models.values(), key=lambda m: m["id"]), "truncated": truncated, **({"endpoint": endpoint} if local else {})}
     except httpx.HTTPStatusError as exc:
         status = exc.response.status_code
