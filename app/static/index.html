@@ -1,18 +1,18 @@
 <!doctype html>
 <html lang="ja">
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>AI PAPER MODELAR | 鉄道ジオラマ</title><link rel="stylesheet" href="/static/styles.css"></head>
+<title>AI PAPER MODELAR | ペーパークラフトジェネレーター</title><link rel="stylesheet" href="/static/styles.css"></head>
 <body>
-<header><div class="brand">▣ <span>AI PAPER MODELAR<small>鉄道模型ジオラマ用ペーパークラフト設計</small></span></div><div class="version">MVP 0.3</div></header>
+<header><div class="brand">▣ <span>AI PAPER MODELAR<small>AIでアイデアと参考資料から紙模型をデザイン</small></span></div><div class="version">MVP 0.3</div></header>
 <main>
 <section class="controls">
 <section class="projectEditor" aria-label="保存済み制作プロジェクト">
 <p class="eyebrow">00 / PROJECT LIBRARY</p><h2>制作プロジェクト</h2>
-<p class="muted">駅舎ごとに原本資料と模型設定を保存し、後日再編集できます。</p>
+<p class="muted">作品ごとに原本資料と模型設定を保存し、後日再編集できます。</p>
 <label for="projectSelect">保存したプロジェクト</label>
 <select id="projectSelect"><option value="">未選択（一時的な作業）</option></select>
 <div class="twocol">
-<div><label for="projectTitle">プロジェクト名</label><input id="projectTitle" maxlength="120" placeholder="例：旧国立駅舎"></div>
+<div><label for="projectTitle">プロジェクト名</label><input id="projectTitle" maxlength="120" placeholder="例：レトロな建物、飛行機、街並み"></div>
 <div><label for="projectNotes">制作メモ</label><input id="projectNotes" maxlength="1000" placeholder="制作方針・注意事項"></div>
 </div>
 <div class="projectButtons">
@@ -22,14 +22,25 @@
 </div>
 <p class="muted">設計条件を変更したら「設定を保存」を押してください。</p>
 </section>
-<p class="eyebrow">01 / RESEARCH</p><h1>駅舎から、紙の情景へ。</h1>
-<p class="lead">駅名・構造物名から参考資料を探し、デザインを選択。縮尺を指定してA4展開図を作成します。</p>
-<label for="place">駅名・構造物名</label>
-<div class="inline"><input id="place" value="東京駅 丸の内駅舎" maxlength="120"><button id="search" class="secondary">資料検索</button></div>
-<p class="muted">公開情報検索はWikipediaの概要のみ。実寸や構造図、写真の利用許諾は別途確認が必要です。</p>
+<p class="eyebrow">01 / RESEARCH</p><h1>アイデアを、紙でかたちに。</h1>
+<p class="lead">建築物、乗り物、風景、小物、キャラクター、オリジナル作品を対象に資料調査やAIデザイン提案ができます。基本形状のA4展開図も作成できます。</p>
+<label for="subjectType">制作ジャンル</label>
+<select id="subjectType">
+<option value="architecture">建築物・構造物</option>
+<option value="vehicle">乗り物・メカ</option>
+<option value="landscape">風景・情景</option>
+<option value="prop">小物・雑貨・道具</option>
+<option value="character">人物・キャラクター</option>
+<option value="original">オリジナル作品</option>
+<option value="railway">鉄道模型・ジオラマ</option>
+<option value="other">その他</option>
+</select>
+<label for="place">対象の名称・アイデア</label>
+<div class="inline"><input id="place" value="小さな洋館" placeholder="例：灯台、バス、城、動物、創作の建物" maxlength="120"><button id="search" class="secondary">資料検索</button></div>
+<p class="muted">名称からWikipediaの公開情報を探します。独自のデザインは資料なしで制作可能です。出典・写真や設計図の権利は別途確認してください。</p>
 <div id="research" aria-live="polite"></div>
 <div class="sectionhead"><span class="eyebrow">01B / YOUR REFERENCES</span></div>
-<p class="lead">撮影写真・外観図・平面図・設計図（JPEG / PNG / WebP / PDF）を追加できます。</p>
+<p class="lead">撮影写真・スケッチ・設計図・参考画像・PDF（JPEG / PNG / WebP / PDF）を追加できます。</p>
 <label for="fileSelect">資料ファイル（1件15MBまで）</label>
 <input id="fileSelect" type="file" multiple accept=".jpg,.jpeg,.png,.webp,.pdf,image/jpeg,image/png,image/webp,application/pdf">
 <div class="twocol">
@@ -39,7 +50,7 @@
 <option value="right">右側面</option><option value="roof">屋根</option>
 <option value="plan">平面図</option><option value="detail">細部・詳細図</option>
 </select></div>
-<div><label for="fileNotes">資料の説明（任意）</label><input id="fileNotes" maxlength="400" placeholder="例：北側立面図、寸法はmm"></div>
+<div><label for="fileNotes">資料の説明（任意）</label><input id="fileNotes" maxlength="400" placeholder="例：正面写真、参考スケッチ、寸法はmm"></div>
 </div>
 <button id="uploadButton" class="secondary uploadButton">選択ファイルを追加</button>
 <div id="uploaded" class="uploadlist" aria-live="polite"></div>
@@ -61,26 +72,40 @@
 <div id="proposals" aria-live="polite"></div>
 <div class="sectionhead"><span class="eyebrow">03 / SCALE GUIDE</span></div>
 <div class="twocol">
-<div><label for="scale">模型規格</label><select id="scale">
+<div><label for="scale">縮尺プリセット</label><select id="scale">
+<option value="1">1/1 実寸（工作・小物）</option>
+<option value="12">1/12 ドールハウス</option>
+<option value="24">1/24 ミニチュア・車両</option>
+<option value="35">1/35 ミリタリー</option>
+<option value="48">1/48 航空機・ミニチュア</option>
+<option value="72">1/72 航空機・模型</option>
+<option value="100" selected>1/100 建築模型</option>
 <option value="150">1/150 日本型N</option>
 <option value="160">1/160 新幹線・外国型N</option>
 <option value="80">1/80 日本型16番</option>
 <option value="87">1/87 HO</option>
 <option value="220">1/220 Z</option>
 <option value="custom">任意の縮尺</option></select></div>
-<div><label for="custom">任意縮尺 1/X</label><input id="custom" type="number" value="100" min="20" max="500" disabled></div>
+<div><label for="custom">任意縮尺 1/X</label><input id="custom" type="number" value="100" min="1" max="500" disabled></div>
 </div>
 <p class="muted" id="scaleGuide"></p>
 <div class="twocol">
-<div><label for="width">実物 幅 (m)</label><input id="width" type="number" value="18" min="0.1" max="100" step=".1"></div>
-<div><label for="depth">実物 奥行 (m)</label><input id="depth" type="number" value="8" min="0.1" max="100" step=".1"></div>
-<div><label for="height">実物 軒高 (m)</label><input id="height" type="number" value="7.5" min=".1" max="50" step=".1"></div>
+<div><label for="unit">寸法入力の単位</label>
+<select id="unit"><option value="m">メートル (m)</option><option value="cm">センチメートル (cm)</option><option value="mm">ミリメートル (mm)</option></select></div>
+<div><label for="template">展開図の基本形状</label>
+<select id="template"><option value="building">建物（屋根・壁・窓）</option><option value="box">汎用箱型（6面）</option></select></div>
+</div>
+<p class="muted" id="templateGuide">現在の展開図エンジンは建物型・汎用箱型のみです。車両・キャラクターなどの実物形状の自動展開は未対応です。</p>
+<div class="twocol">
+<div><label for="width">元の幅 (m)</label><input id="width" type="number" value="18" min="0.1" max="100" step=".1"></div>
+<div><label for="depth">元の奥行 (m)</label><input id="depth" type="number" value="8" min="0.1" max="100" step=".1"></div>
+<div><label for="height">元の高さ／軒高 (m)</label><input id="height" type="number" value="7.5" min=".1" max="50" step=".1"></div>
 <div><label for="pitch">屋根勾配 (°)</label><input id="pitch" type="number" value="30" min="5" max="60"></div>
 <div><label for="roof">屋根形状</label><select id="roof"><option value="gable">切妻</option><option value="flat">陸屋根</option></select></div>
 <div><label for="overhang">軒の出 (m)</label><input id="overhang" type="number" value="0.3" min="0" max="2" step=".1"></div>
 </div>
 <div id="scaleResult" class="result" aria-live="polite"></div>
-<p class="muted">初期の寸法は架空の例です。入力前に資料から確認してください。</p>
+<p class="muted">初期寸法はサンプルです。AIの提案は設計の参考で、図面の形状や寸法を自動復元する機能ではありません。</p>
 <button id="generate" class="mainbutton">この条件でA4展開図を生成</button>
 </section>
 <section class="workspace">
@@ -90,10 +115,10 @@
 <div><button id="saveSvg" class="secondary" disabled>SVG保存</button><button id="savePdf" disabled>PDF保存</button></div></div>
 <aside><h3>印刷と組立ガイド</h3><p>A4用紙に倍率100%で印刷し、下部の50mm基準線を定規で測ってください。「用紙サイズに合わせる」はオフにします。</p>
 <p>実線は切断、破線は折り目。窓や扉は印刷による表現です。大きなパーツは5mm重ねて貼り合わせます。</p>
-<p>初期版は一般的な建物形状のテンプレートです。実在駅舎の3D形状・立面図の自動復元は未実装です。</p></aside>
+<p>展開図は建物型または汎用箱型の基本テンプレートです。写真や設計図から乗り物・人物など任意の複雑な立体形状を自動復元・展開する機能は未実装です。</p></aside>
 </section>
 </main>
-<footer>AI Paper Modelar · Prototype · 写真・図面の使用条件を確認してください。</footer>
+<footer>AI Paper Modelar · 汎用ペーパークラフト試作版 · 参考資料の使用条件をご確認ください。</footer>
 <script defer src="/static/app.js"></script>
 <script defer src="/static/projects.js"></script>
 </body></html>
