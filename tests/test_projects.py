@@ -98,3 +98,25 @@ def test_no_external_media_without_consent(monkeypatch):
     b=asyncio.run(ai.proposals(ProposalRequest(**base,include_uploads=True)))
     assert b["analyzed_uploads"]==1
     assert "input_image" in json.dumps(sent[-1])
+
+
+def test_saved_generic_project_settings_persist():
+    pid = new_project("Vintage bus")
+    data = {
+        "name": "Vintage bus",
+        "model_spec": {
+            "name": "Vintage bus", "scale": 24,
+            "subject_type": "vehicle", "template": "box",
+            "input_unit": "cm",
+            "width_m": 0.21, "depth_m": 0.09, "height_m": 0.11,
+            "roof": "flat", "pitch_deg": 0,
+        },
+    }
+    response = client.patch("/api/projects/" + pid, json=data)
+    assert response.status_code == 200, response.text
+    reopened = client.get("/api/projects/" + pid).json()["project"]["model_spec"]
+    assert reopened["subject_type"] == "vehicle"
+    assert reopened["template"] == "box"
+    assert reopened["input_unit"] == "cm"
+    assert reopened["width_m"] == 0.21
+    assert reopened["scale"] == 24

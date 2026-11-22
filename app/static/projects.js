@@ -82,15 +82,23 @@ const paperLibrary = {
       const s=project.model_spec;
       if(s){
         el("place").value=s.name||project.name;
-        const known=["150","160","80","87","220"];
+        el("subjectType").value=s.subject_type||"architecture";
+        el("template").value=s.template||"building";
+        const known=["1","12","24","35","48","72","100","150","160","80","87","220"];
         el("scale").value=known.includes(String(s.scale))?String(s.scale):"custom";
         el("custom").value=s.scale;
+        const unit=unitFactors[s.input_unit]?s.input_unit:"m";
+        el("unit").value=unit;
+        currentInputUnit=unit;
         for(const [id,key] of [
           ["width","width_m"],["depth","depth_m"],["height","height_m"],
-          ["pitch","pitch_deg"],["overhang","overhang_m"],["roof","roof"]
+          ["overhang","overhang_m"]
         ]){
-          if(s[key]!==undefined)el(id).value=s[key];
+          if(s[key]!==undefined)el(id).value=formatInput(s[key]/unitFactors[unit]);
         }
+        if(s.pitch_deg!==undefined)el("pitch").value=s.pitch_deg;
+        if(s.roof!==undefined)el("roof").value=s.roof;
+        updateDimensionLabels();updateTemplateHint();
         const radio=document.querySelector('input[name="style"][value="'+s.style+'"]');
         if(radio)radio.checked=true;
         hint();sizes();

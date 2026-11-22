@@ -17,11 +17,14 @@ AREA_X, AREA_Y, AREA_W, AREA_H, OVERLAP = 12.0, 28.0, 186.0, 225.0, 5.0
 
 Style = Literal["faithful", "standard", "anime", "retro", "easy"]
 Roof = Literal["gable", "flat"]
+SubjectType = Literal["architecture", "vehicle", "landscape", "prop", "character", "original", "railway", "other"]
+Template = Literal["building", "box"]
+InputUnit = Literal["m", "cm", "mm"]
 
 
 class ModelSpec(BaseModel):
-    name: str = Field(default="Sample station", min_length=1, max_length=80)
-    scale: int = Field(default=150, ge=20, le=500)
+    name: str = Field(default="Untitled paper model", min_length=1, max_length=80)
+    scale: int = Field(default=150, ge=1, le=500)
     width_m: float = Field(default=18.0, gt=0, le=100)
     depth_m: float = Field(default=8.0, gt=0, le=100)
     height_m: float = Field(default=7.5, gt=0, le=50, description="Eave / wall height")
@@ -29,10 +32,13 @@ class ModelSpec(BaseModel):
     pitch_deg: float = Field(default=30, ge=0, le=60)
     style: Style = "standard"
     roof: Roof = "gable"
+    subject_type: SubjectType = "architecture"
+    template: Template = "building"
+    input_unit: InputUnit = "m"  # Display preference; actual dimensions remain metres.
 
     @model_validator(mode="after")
     def check(self):
-        if self.roof == "gable" and self.pitch_deg < 5:
+        if self.template == "building" and self.roof == "gable" and self.pitch_deg < 5:
             raise ValueError("Gable roof pitch must be at least 5 degrees")
         return self
 
@@ -138,7 +144,53 @@ def roof_part(title: str, width: float, slope: float, spec: ModelSpec,
             "graphics": g}
 
 
+def box_panel(title: str, width: float, height: float, spec: ModelSpec,
+              *, tabs: bool = True) -> dict:
+    """A printed cuboid panel, with cut-contour and fold-tabs (not a 3-D reconstruction)."""
+    g = []
+    wall_color = COLORS[spec.style][0]
+    x, y = 6.0, 6.0
+    if tabs:
+        tab = min(4.0, width / 8, height / 8)
+        margin = min(4.0, width / 6, height / 6)
+        polygon(g, [
+            (x, y), (x + margin, y),
+            (x + margin + tab / 2, y - tab), (x + width - margin - tab / 2, y - tab),
+            (x + width - margin, y), (x + width, y), (x + width, y + height),
+            (x + width - margin, y + height),
+            (x + width - margin - tab / 2, y + height + tab),
+            (x + margin + tab / 2, y + height + tab),
+            (x + margin, y + height), (x, y + height),
+            (x, y + height - margin),
+            (x - tab, y + height - margin - tab / 2),
+            (x - tab, y + margin + tab / 2),
+            (x, y + margin),
+        ], wall_color)
+        line(g, x + margin, y, x + width - margin, y, "fold")
+        line(g, x + margin, y + height, x + width - margin, y + height, "fold")
+        line(g, x, y + margin, x, y + height - margin, "fold")
+    else:
+        rect(g, x, y, width, height, wall_color, kind="cut")
+    return {"name": title, "w": width + 12, "h": height + 12, "graphics": g}
+
+
+def box_parts(spec: ModelSpec) -> list[dict]:
+    w = miniature_mm(spec.width_m, spec.scale)
+    d = miniature_mm(spec.depth_m, spec.scale)
+    h = miniature_mm(spec.height_m, spec.scale)
+    return [
+        box_panel("Front face", w, h, spec),
+        box_panel("Back face", w, h, spec),
+        box_panel("Left face", d, h, spec),
+        box_panel("Right face", d, h, spec),
+        box_panel("Top face", w, d, spec, tabs=False),
+        box_panel("Bottom face", w, d, spec, tabs=False),
+    ]
+
+
 def build_parts(spec: ModelSpec) -> list[dict]:
+    if spec.template == "box":
+        return box_parts(spec)
     w = miniature_mm(spec.width_m, spec.scale)
     d = miniature_mm(spec.depth_m, spec.scale)
     h = miniature_mm(spec.height_m, spec.scale)
@@ -183,7 +235,7 @@ def page_jobs(spec: ModelSpec) -> list[dict]:
 
 def summary(spec: ModelSpec) -> dict:
     d = miniature_mm(spec.depth_m, spec.scale)
-    rise = d / 2 * tan(radians(spec.pitch_deg)) if spec.roof == "gable" else 0
+    rise = d / 2 * tan(radians(spec.pitch_deg)) if spec.template == "building" and spec.roof == "gable" else 0
     jobs = page_jobs(spec)
     return {
         "size_mm": {
@@ -193,12 +245,15 @@ def summary(spec: ModelSpec) -> dict:
             "total_height": round(miniature_mm(spec.height_m, spec.scale) + rise, 1),
         },
         "scale": spec.scale,
+        "subject_type": spec.subject_type,
+        "template": spec.template,
         "parts": [{"name": p["name"], "width_mm": round(p["w"], 1),
                    "height_mm": round(p["h"], 1)} for p in build_parts(spec)],
         "pages": len(jobs),
         "warnings": [
             "Dimensions are supplied by the user, not verified from online sources.",
-            "Windows and doors are illustrative printed details.",
+            ("Windows and doors are illustrative printed details." if spec.template == "building"
+             else "Box template is a basic cuboid, not an automatic reconstruction of the subject."),
             "Large parts are tiled with 5 mm overlap for assembly.",
         ],
     }
