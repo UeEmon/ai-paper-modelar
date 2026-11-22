@@ -6,6 +6,7 @@ test('accessible tabs, keyboard and browser history preserve input and generated
   await expect(page.getByRole('tabpanel')).toHaveCount(1);
   await expect(tab(page,'資料・AI提案')).toHaveAttribute('aria-selected','true');
   await page.locator('#place').fill('タブで作る灯台');
+  await page.locator('#fileSelect').setInputFiles({name:'reference.png',mimeType:'image/png',buffer:Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aE0sAAAAASUVORK5CYII=','base64')});
   await tab(page,'基本形状').click();
   await expect(page.locator('#fileSelect')).toBeHidden();
   await page.locator('#template').selectOption('cylinder');
@@ -28,6 +29,7 @@ test('accessible tabs, keyboard and browser history preserve input and generated
   await expect(tab(page,'3Dモデル')).toBeFocused();await expect(page.locator('#meshFile')).toBeVisible();
   await page.keyboard.press('End');await expect(tab(page,'AI設定')).toBeFocused();
   await page.keyboard.press('Home');await expect(tab(page,'資料・AI提案')).toBeFocused();
+  expect(await page.locator('#fileSelect').evaluate(input=>input.files[0].name)).toBe('reference.png');
   await page.keyboard.press('ArrowLeft');await expect(tab(page,'AI設定')).toBeFocused();
   expect(await page.locator('[role=tab][tabindex="0"]').count()).toBe(1);
   expect(errors).toEqual([]);

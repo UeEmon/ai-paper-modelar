@@ -64,3 +64,5 @@ main{display:block;margin-top:26px}
 @media(max-width:930px){.designLayout,.shapeLayout{grid-template-columns:1fr}.workflowGuide{position:static}.shapeLayout .preview{min-height:380px}}
 @media(max-width:480px){main{margin-top:20px}.pageIntro h1{font-size:24px}.appTabs [role=tab]{padding:12px 16px;font-size:13px}.workContext{align-items:flex-start}.aiSettings{padding:16px}.tabPanel .meshImport{padding:16px}}
 @media(max-width:480px){.appTabs{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));overflow:visible}.appTabs [role=tab]{padding:11px 4px;font-size:12px}}
+
+.tabPanel:focus-visible{outline:2px solid #558f80;outline-offset:5px;border-radius:12px}
