@@ -19,7 +19,6 @@ def test_normalized_catalogues_use_get_and_do_not_need_a_model(monkeypatch,provi
     ids=['org/model:q4','another-model'] if provider in ai.LOCAL_PROVIDERS else (['gemini-2.5-flash','gemini-2.5-pro'] if provider=='gemini' else ['gpt-4.1','gpt-4o'] if provider=='openai' else ['claude-sonnet-4-5','claude-opus-4-1'])
     def handler(request):
         sent.append(request)
-        if request.url.path=='/api/show':return httpx.Response(200,json={'capabilities':['completion','vision']})
         if provider=='gemini':
             data={'models':[{'name':'models/'+model,'displayName':model,'supportedGenerationMethods':['generateContent']} for model in ids]+[{'name':'models/embed-only','supportedGenerationMethods':['embedContent']}]}
         elif provider=='ollama':data={'models':[{'name':model} for model in ids]}

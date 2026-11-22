@@ -131,7 +131,10 @@ async def list_ai_models(request: Request):
             raise ValueError("Missing credentials")
     except ValueError:
         return JSONResponse({"ok": False, "message": "AI設定を確認してください。モデル一覧の取得にはプロバイダーとキー（ローカルは任意）が必要です。"}, status_code=400)
-    code, result = await available_models(credentials)
+    purpose = request.headers.get("x-ai-model-purpose", "general")
+    if purpose not in {"general", "image3d"}:
+        return JSONResponse({"ok": False, "message": "モデルの用途を確認してください。"}, status_code=400)
+    code, result = await available_models(credentials, image3d=purpose == "image3d")
     return JSONResponse(result, status_code=code)
 
 

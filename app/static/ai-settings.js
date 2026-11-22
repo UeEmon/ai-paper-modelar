@@ -2,7 +2,7 @@
 (function(){
   const get=id=>document.getElementById(id);
   const {AIVault,defaults,endpoints,isLocal,PREFIX}=window.PaperAIVault;
-  let threeModels={};
+  let threeModels={},simpleController;
   let vault,modelRequest=0,modelController=null,settingsVersion=0;
   let localConfig={endpoints:{...endpoints},runtime:"native",automatic_host_mapping:false};
   async function refreshLocalConfig(){
@@ -40,6 +40,7 @@
     get("threeUnlockGuide").hidden=Boolean(vault.data);
     get("threeLockMessage").textContent=vault.data?"解除中です。選択したAPIのキーを入力し、接続を確認して保存してください。":"APIとモデルは選択できます。キーの入力・接続テスト・保存には、上のユーザープロファイルを作成するか、選択してパスフレーズで解除してください。";
     get("threeProvider").value=vault.data?.threeD?.provider||get("threeProvider").value||"huggingface";threeFields();
+    simpleController?.render();
     get("aiState").textContent=vault.data?"解除中 · "+(vault.data.provider==="none"?"定型案を使用":vault.data.provider+" を使用"):"ロック中 · 定型案を使用";
   }
   function profiles(selected=""){
@@ -57,9 +58,9 @@
   let busy=false;
   async function action(work,{refresh=true}={}){
     if(busy)return;busy=true;
-    for(const id of ["aiCreate","aiUnlock","aiSave","aiTest","aiTestImage","aiDelete","aiModels","aiResetEndpoint","threeTest","threeSave"])get(id).disabled=true;
+    for(const id of ["aiCreate","aiUnlock","aiSave","aiTest","aiTestImage","aiDelete","aiModels","aiResetEndpoint","threeTest","threeSave","simpleModels","simpleTest","simpleSave"])get(id).disabled=true;
     try{await work();}catch(error){message(error.message);}
-    finally{busy=false;for(const id of ["aiCreate","aiUnlock","aiSave","aiTest","aiTestImage","aiDelete","aiModels","aiResetEndpoint","threeTest","threeSave"])get(id).disabled=false;if(refresh)render();get("aiModels").disabled=get("aiProvider").value==="none";}
+    finally{busy=false;for(const id of ["aiCreate","aiUnlock","aiSave","aiTest","aiTestImage","aiDelete","aiModels","aiResetEndpoint","threeTest","threeSave","simpleModels","simpleTest","simpleSave"])get(id).disabled=false;if(refresh)render();get("aiModels").disabled=get("aiProvider").value==="none";}
   }
   try{
     if(!window.isSecureContext||!window.crypto?.subtle)throw Error();
@@ -69,7 +70,9 @@
     message("暗号化保存を利用できません。HTTPSまたはlocalhostで開き、ブラウザ保存を許可してください。定型案は利用できます。");
     window.paperAI={headers:()=>({})};return;
   }
-  refreshLocalConfig().catch(()=>{});
+  simpleController=window.initSimple3DSettings({vault,action,endpoint:provider=>localConfig.endpoints[provider]||endpoints[provider]||""});
+  simpleController.render();
+  refreshLocalConfig().then(()=>simpleController.refreshDefaults()).catch(()=>{});
   fetch("/api/3d/models",{cache:"no-store"}).then(r=>{if(!r.ok)throw Error();return r.json();}).then(data=>{threeModels=data.providers;threeFields();}).catch(()=>{get("threeMessage").textContent="3Dモデル一覧を取得できません。再読込してください。";});
   get("threeUnlockGuide").addEventListener("click",()=>{
     const target=get(vault.list().length?"aiPassword":"aiName");
@@ -99,7 +102,7 @@
     get("aiEndpoint").value=endpoint;resetModels();
     message("接続先を "+endpoint+" に戻しました。モデル一覧を取得して、接続を確認して保存してください。");
   },{refresh:false}));
-  window.paperAI={headers:()=>vault.headers(),headers3D:()=>vault.headers3D()};
+  window.paperAI={headers:()=>vault.headers(),headers3D:()=>vault.headers3D(),headersSimple3D:()=>vault.headersSimple3D()};
   get("aiProfile").addEventListener("change",()=>{vault.lock();render();message("選択したプロファイルを解除してください。");});
   get("aiProvider").addEventListener("change",fields);
   get("aiCreate").addEventListener("click",()=>action(async()=>{
@@ -146,7 +149,7 @@
       for(const model of result.models)select.add(new Option(model.name===model.id?model.id:model.name+"（"+model.id+"）",model.id));
       select.disabled=result.models.length===0;
       syncModelSelection();
-      get("aiModelsMessage").textContent=result.models.length?result.models.length+"件を取得しました。画像→簡易3D向けの候補です。画像対応テストで動作を確認してください。"+(result.truncated?" 一覧は一部です。必要なIDは手入力できます。":""):"画像→簡易3Dに必要な能力を確認できるモデルがありません。画像対応モデルの導入・能力情報を確認してください。IDを手入力して画像対応テストもできます。";
+      get("aiModelsMessage").textContent=result.models.length?result.models.length+"件を取得しました。文章専用モデルも選べます。資料・文章提案に使うモデルを接続テストで確認してください。"+(result.truncated?" 一覧は一部です。必要なIDは手入力できます。":""):"モデルが見つかりません。導入状態・権限を確認するか、モデルIDを手入力してください。";
     }catch(error){if(request===modelRequest&&error.name!=="AbortError")get("aiModelsMessage").textContent=error instanceof TypeError?"一覧の取得に失敗しました。接続先を確認するかモデルIDを手入力してください。":error.message;}
     finally{if(request===modelRequest){modelController=null;get("aiModels").disabled=busy||get("aiProvider").value==="none";}}
   });
