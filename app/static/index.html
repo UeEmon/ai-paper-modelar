@@ -224,19 +224,22 @@
 <p class="muted">画像対応テストは左右の色が異なる確認用画像を送り、色を読み取れるか確認します。保存時はテキスト、ローカルAIの画像送信が有効なら画像も確認します。資料や検索画像はテストに送りません。クラウドAIでは少量のAPI利用料が発生する場合があります。</p>
 <p class="muted">保存後の設定をAI提案に使用します。プロバイダーごとのモデルとキーを保持します。</p>
 </fieldset>
-<fieldset id="threeEditor" disabled><legend>外部3D生成API（簡易3D用AIと別に設定）</legend>
+<fieldset id="threeEditor"><legend>外部3D生成API（簡易3D用AIと別に設定）</legend>
 <label for="threeProvider">3D API</label><select id="threeProvider"><option value="huggingface">Hugging Face · TRELLIS.2（無料枠・待ち行列あり）</option><option value="meshy">Meshy（有料）</option><option value="tripo">Tripo（有料・契約枠による）</option></select>
 <label for="threeModel">3D生成モデル</label><select id="threeModel"></select>
+<p id="threeLockMessage" role="status">APIとモデルは選択できます。キーの入力・保存にはユーザープロファイルを作成または解除してください。</p>
+<button id="threeUnlockGuide" type="button" class="secondary">プロファイルを作成・解除する</button>
+<fieldset id="threeCredentials" disabled><legend>キーと接続確認・保存</legend>
 <label for="threeKey">APIキー / HFトークン（空欄なら保存済みを使用）</label><input id="threeKey" type="password" autocomplete="off" maxlength="512">
 <p class="muted">HFはトークンなしでも試せますが、無料枠の上限と混雑があります。Meshy・Tripoは提供元の残高を使用します。接続テストでは生成・課金を行いません。画像は外部へ送信され、提供元の保管条件に従います。このアプリには資料・生成3D・キーを永続保存しません。</p>
 <div class="projectButtons"><button id="threeTest" type="button" class="secondary">3D APIの接続テスト</button><button id="threeSave" type="button">接続を確認して3D設定を保存</button></div><p id="threeMessage" role="status"></p>
-</fieldset></fieldset><p id="aiMessage" role="status" aria-live="polite"></p>
+</fieldset></fieldset></fieldset><p id="aiMessage" role="status" aria-live="polite"></p>
 </section></section>
 </main>
 <footer>AI Paper Modelar · 汎用ペーパークラフト試作版 · 参考資料の使用条件をご確認ください。</footer>
 <script defer src="/static/tabs.js"></script>
 <script defer src="/static/ai-vault.js"></script>
-<script defer src="/static/ai-settings.js"></script>
+<script defer src="/static/ai-settings.js?v=3d-selection-1"></script>
 <script defer src="/static/app.js"></script>
 <script defer src="/static/projects.js"></script>
 <script defer src="/static/outputs.js"></script>

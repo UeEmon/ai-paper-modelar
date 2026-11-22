@@ -36,8 +36,10 @@
     get("aiEditor").disabled=!vault.data;
     get("aiProvider").value=vault.data?.provider||"none";fields();
     window.dispatchEvent(new Event("paper-ai-change"));
-    get("threeEditor").disabled=!vault.data;get("threeKey").value="";
-    get("threeProvider").value=vault.data?.threeD?.provider||"huggingface";threeFields();
+    get("threeCredentials").disabled=!vault.data;get("threeKey").value="";
+    get("threeUnlockGuide").hidden=Boolean(vault.data);
+    get("threeLockMessage").textContent=vault.data?"解除中です。選択したAPIのキーを入力し、接続を確認して保存してください。":"APIとモデルは選択できます。キーの入力・接続テスト・保存には、上のユーザープロファイルを作成するか、選択してパスフレーズで解除してください。";
+    get("threeProvider").value=vault.data?.threeD?.provider||get("threeProvider").value||"huggingface";threeFields();
     get("aiState").textContent=vault.data?"解除中 · "+(vault.data.provider==="none"?"定型案を使用":vault.data.provider+" を使用"):"ロック中 · 定型案を使用";
   }
   function profiles(selected=""){
@@ -46,9 +48,10 @@
     get("aiProfile").value=selected;
   }
   function threeFields(){
-    const provider=get("threeProvider").value,config=vault.data?.threeD?.providers?.[provider];
+    const provider=get("threeProvider").value,config=vault.data?.threeD?.providers?.[provider],previous=get("threeModel").value;
     get("threeModel").replaceChildren(...(threeModels[provider]||[]).map(id=>new Option(id,id)));
     if(config&&threeModels[provider]?.includes(config.model))get("threeModel").value=config.model;
+    else if(threeModels[provider]?.includes(previous))get("threeModel").value=previous;
     get("threeKey").value="";get("threeKey").placeholder=config?"保存済み（変更時のみ入力）":"APIキー / HFトークン";
   }
   let busy=false;
@@ -68,6 +71,11 @@
   }
   refreshLocalConfig().catch(()=>{});
   fetch("/api/3d/models",{cache:"no-store"}).then(r=>{if(!r.ok)throw Error();return r.json();}).then(data=>{threeModels=data.providers;threeFields();}).catch(()=>{get("threeMessage").textContent="3Dモデル一覧を取得できません。再読込してください。";});
+  get("threeUnlockGuide").addEventListener("click",()=>{
+    const target=get(vault.list().length?"aiPassword":"aiName");
+    target.scrollIntoView({block:"center",behavior:"smooth"});target.focus({preventScroll:true});
+    message(vault.list().length?"上のユーザープロファイルを選び、パスフレーズを入力して「解除」を押してください。":"プロファイル名と12文字以上のパスフレーズを入力して「新規作成」を押してください。");
+  });
   get("threeProvider").addEventListener("change",()=>{settingsVersion++;threeFields();});
   for(const id of ["threeModel","threeKey"])get(id).addEventListener("input",()=>{settingsVersion++;});
   async function testThree(save){
