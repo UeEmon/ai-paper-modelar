@@ -487,7 +487,7 @@ async def check_connection(credentials: AICredentials, vision_test: bool = False
         return 502, {"ok": False, "message": "接続または応答の確認に失敗しました。接続先とAIサーバーの起動状態を確認してください。"}
 
 
-async def available_models(credentials: AICredentials):
+async def available_models(credentials: AICredentials, image3d: bool = False):
     """Return a bounded catalogue from a fixed/approved provider URL, without generation."""
     provider, key = credentials.provider, credentials.api_key
     local = provider in LOCAL_PROVIDERS
@@ -547,7 +547,7 @@ async def available_models(credentials: AICredentials):
                 params["pageToken" if provider == "gemini" else "after_id"] = cursor
                 if page == 4:
                     truncated = True
-            if provider == "ollama":
+            if image3d and provider == "ollama":
                 # Metadata reads only: never load/pull a model or run inference here.
                 semaphore = asyncio.Semaphore(4)
                 async def details(model_id):
@@ -563,7 +563,7 @@ async def available_models(credentials: AICredentials):
                 ids = list(models)[:100]
                 if len(models) > len(ids): truncated = True
                 metadata = dict(await asyncio.gather(*(details(mid) for mid in ids)))
-            elif provider == "local_openai" and any(item.get("type") is None for item in metadata.values()):
+            elif image3d and provider == "local_openai" and any(item.get("type") is None for item in metadata.values()):
                 # LM Studio's same-origin metadata endpoint supplements /v1/models.
                 # Only intersect IDs already returned by the configured /models API.
                 if endpoint.endswith("/v1"):
@@ -576,8 +576,9 @@ async def available_models(credentials: AICredentials):
                                 metadata[item["id"]] = item
                     except (httpx.HTTPError, ValueError, TypeError):
                         pass
-            models = {mid: item for mid, item in models.items()
-                      if image_scene_candidate(provider, mid, metadata.get(mid, {}))}
+            if image3d:
+                models = {mid: item for mid, item in models.items()
+                          if image_scene_candidate(provider, mid, metadata.get(mid, {}))}
         return 200, {"ok": True, "models": sorted(models.values(), key=lambda m: m["id"]), "truncated": truncated, **({"endpoint": endpoint} if local else {})}
     except httpx.HTTPStatusError as exc:
         status = exc.response.status_code

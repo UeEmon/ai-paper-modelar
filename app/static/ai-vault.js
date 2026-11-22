@@ -60,9 +60,9 @@
       const ciphertext=await this.crypto.subtle.encrypt({name:"AES-GCM",iv,additionalData:encode.encode(id)},key,encode.encode(JSON.stringify(data)));
       return {version:1,name,salt:b64(salt),iv:b64(iv),ciphertext:b64(new Uint8Array(ciphertext))};
     }
-    prepare(provider,model,apiKey,options={}){
-      if(!this.data)throw Error("プロファイルを解除してください。");
-      const data=structuredClone(this.data);
+    prepare(provider,model,apiKey,options={},source=this.data){
+      if(!source)throw Error("プロファイルを解除してください。");
+      const data=structuredClone(source);
       if(provider!=="none"){
         const local=isLocal(provider);
         const pattern=local?/^[A-Za-z0-9][A-Za-z0-9._:/-]{0,199}$/:/^[A-Za-z0-9][A-Za-z0-9._:-]{0,119}$/;
@@ -87,6 +87,20 @@
       if(epoch!==this.epoch)throw Error("操作が切り替わりました。");
       this.storage.setItem(PREFIX+id,JSON.stringify(record));this.data=data;
     }
+    prepareSimple3D(provider,model,apiKey,options={}){
+      if(!this.data)throw Error("プロファイルを解除してください。");
+      const data=structuredClone(this.data);
+      data.simple3D=this.prepare(provider,model,apiKey,{...options,vision:true},data.simple3D||{provider:"none",providers:{}});
+      return data;
+    }
+    async saveSimple3D(provider,model,apiKey,options={}){
+      const epoch=this.epoch,id=this.id,data=this.prepareSimple3D(provider,model,apiKey,options);
+      const old=JSON.parse(this.storage.getItem(PREFIX+id));
+      const record=await this.encrypt(id,old.name,this.salt,this.key,data);
+      if(epoch!==this.epoch)throw Error("操作が切り替わりました。");
+      this.storage.setItem(PREFIX+id,JSON.stringify(record));this.data=data;
+    }
+    headersSimple3D(data=this.data){return this.headers(data?.simple3D||null);}
     prepare3D(provider,model,apiKey){
       if(!this.data)throw Error("プロファイルを解除してください。");
       const data=structuredClone(this.data);

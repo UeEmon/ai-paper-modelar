@@ -90,3 +90,23 @@ test('3D provider credentials stay encrypted and independent from simple AI sett
  await v.save3D('meshy','meshy-6','');assert.equal(v.headers3D()['X-3D-Key'],'test-meshy-key');
  await v.create('Other','other-passphrase');assert.deepEqual(v.headers3D(),{});
 });
+test('general text AI and simple 3D vision AI have independent providers, models and keys',async()=>{
+ const s=new Storage(),v=new AIVault(s,webcrypto),id=await v.create('Separate AI','separate-passphrase');
+ await v.save('openai','gpt-3.5-turbo','general-text-key');
+ assert.deepEqual(v.headersSimple3D(),{});
+ await assert.rejects(v.saveSimple3D('openai','gpt-4.1-mini','')); // never inherit general key
+ await v.saveSimple3D('ollama','gemma4:12b','',{endpoint:'http://localhost:11434'});
+ await v.save3D('meshy','meshy-t2.5','external-3d-key');
+ assert.equal(v.headers()['X-AI-Model'],'gpt-3.5-turbo');
+ assert.equal(v.headersSimple3D()['X-AI-Model'],'gemma4:12b');
+ assert.equal(v.headersSimple3D()['X-AI-Vision'],'true');
+ assert.equal(v.headers3D()['X-3D-Provider'],'meshy');
+ await v.save('ollama','text-only','',{endpoint:'http://localhost:11434',vision:false});
+ assert.equal(v.headersSimple3D()['X-AI-Model'],'gemma4:12b');
+ await v.saveSimple3D('openai','gpt-4.1-mini','simple-only-key');
+ assert.equal(v.headers()['X-AI-Model'],'text-only');
+ for(const key of ['general-text-key','external-3d-key','simple-only-key'])assert.ok(!JSON.stringify([...s.map]).includes(key));
+ v.lock();assert.deepEqual(v.headersSimple3D(),{});await v.unlock(id,'separate-passphrase');
+ assert.equal(v.headersSimple3D()['X-AI-Key'],'simple-only-key');assert.equal(v.headers()['X-AI-Model'],'text-only');
+ await v.create('Other user','different-passphrase');assert.deepEqual(v.headersSimple3D(),{});
+});

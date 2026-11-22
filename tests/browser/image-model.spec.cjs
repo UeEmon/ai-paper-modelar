@@ -10,11 +10,15 @@ async function mockImages(page){
   await page.route('**/api/image-model/images/*/preview',r=>r.fulfill({contentType:'image/png',body:Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aE0sAAAAASUVORK5CYII=','base64')}));
 }
 async function ai(page){
-  await page.route('**/api/ai/test',r=>r.fulfill({json:{ok:true}}));
+  await page.route('**/api/ai/test',r=>r.fulfill({json:{ok:true,vision_tested:true}}));
   await page.goto('/#settings');await page.locator('#aiName').fill('画像用AI');await page.locator('#aiPassword').fill('image-passphrase');await page.locator('#aiCreate').click();
   await expect(page.locator('#aiMessage')).toContainText('作成しました');
   await page.locator('#aiProvider').selectOption('openai');await page.locator('#aiKey').fill('test-image-key');await page.locator('#aiSave').click();
   await expect(page.locator('#aiMessage')).toContainText('暗号化して保存しました');
+  await page.route('**/api/ai/models',r=>r.fulfill({json:{ok:true,models:[{id:'gpt-4.1-mini',name:'gpt-4.1-mini'}]}}));
+  await page.locator('#simpleProvider').selectOption('openai');await page.locator('#simpleKey').fill('test-image-key');
+  await page.locator('#simpleModels').click();await page.locator('#simpleModel').selectOption('gpt-4.1-mini');await page.locator('#simpleSave').click();
+  await expect(page.locator('#simpleMessage')).toContainText('暗号化して保存');
   await page.getByRole('tab',{name:'画像→3D',exact:true}).click();
 }
 async function select(page){

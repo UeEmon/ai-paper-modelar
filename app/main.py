@@ -44,6 +44,8 @@ async def security_headers(request: Request, call_next):
             "img-src 'self' blob: data:; connect-src 'self'; object-src 'none'; "
             "base-uri 'none'; frame-ancestors 'none'; form-action 'self'"
         )
+    if request.url.path == "/" or request.url.path.startswith("/static/"):
+        response.headers["Cache-Control"] = "no-cache"
     response.headers["Referrer-Policy"] = "no-referrer"
     response.headers["X-Content-Type-Options"] = "nosniff"
     if request.url.path.startswith("/api/"):
@@ -129,7 +131,10 @@ async def list_ai_models(request: Request):
             raise ValueError("Missing credentials")
     except ValueError:
         return JSONResponse({"ok": False, "message": "AI設定を確認してください。モデル一覧の取得にはプロバイダーとキー（ローカルは任意）が必要です。"}, status_code=400)
-    code, result = await available_models(credentials)
+    purpose = request.headers.get("x-ai-model-purpose", "general")
+    if purpose not in {"general", "image3d"}:
+        return JSONResponse({"ok": False, "message": "モデルの用途を確認してください。"}, status_code=400)
+    code, result = await available_models(credentials, image3d=purpose == "image3d")
     return JSONResponse(result, status_code=code)
 
 

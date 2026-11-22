@@ -42,7 +42,26 @@ def test_local_metadata_filters_aliases_and_unknown_models(monkeypatch,provider)
         assert req.url.path=='/api/v0/models'
         return httpx.Response(200,json={'data':[{'id':'custom','type':'vlm'},{'id':'text','type':'llm'},{'id':'not-listed','type':'vlm'}]})
     monkeypatch.setattr(ai.httpx,'AsyncClient',lambda **kw:original(transport=httpx.MockTransport(handler),**kw))
-    r=TestClient(app).post('/api/ai/models',headers={'X-AI-Provider':provider,'X-AI-Endpoint':'http://localhost:11434' if provider=='ollama' else 'http://localhost:1234/v1'})
+    r=TestClient(app).post('/api/ai/models',headers={'X-AI-Provider':provider,'X-AI-Model-Purpose':'image3d','X-AI-Endpoint':'http://localhost:11434' if provider=='ollama' else 'http://localhost:1234/v1'})
     assert r.status_code==200 and [m['id'] for m in r.json()['models']]==['custom']
     assert all(req.url.host=='localhost' for req in requests)
     assert not any('/chat' in req.url.path for req in requests)
+
+@pytest.mark.parametrize('provider',['openai','ollama'])
+def test_general_catalogue_keeps_text_models_but_simple3d_filters_them(monkeypatch,provider):
+    original=httpx.AsyncClient;calls=[]
+    def handler(req):
+        calls.append(req)
+        if req.url.path=='/api/show':
+            name=json.loads(req.content)['model']
+            return httpx.Response(200,json={'capabilities':['completion','vision'] if name=='custom-vision' else ['completion']})
+        return httpx.Response(200,json={'data':[{'id':'gpt-3.5-turbo'},{'id':'gpt-4.1-mini'}]} if provider=='openai' else {'models':[{'name':'custom-vision'},{'name':'text-only'}]})
+    monkeypatch.setattr(ai.httpx,'AsyncClient',lambda **kw:original(transport=httpx.MockTransport(handler),**kw))
+    h={'X-AI-Provider':provider,'X-AI-Key':'test-key'}
+    if provider=='ollama':h['X-AI-Endpoint']='http://localhost:11434'
+    c=TestClient(app)
+    general=c.post('/api/ai/models',headers=h)
+    assert len(general.json()['models'])==2 and len(calls)==1
+    vision=c.post('/api/ai/models',headers={**h,'X-AI-Model-Purpose':'image3d'})
+    assert [m['id'] for m in vision.json()['models']]==(['gpt-4.1-mini'] if provider=='openai' else ['custom-vision'])
+    assert c.post('/api/ai/models',headers={**h,'X-AI-Model-Purpose':'invalid'}).status_code==400

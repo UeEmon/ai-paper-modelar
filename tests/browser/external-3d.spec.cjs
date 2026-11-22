@@ -16,7 +16,7 @@ test('external providers save separately, consent is required, and simple genera
  await expect(page.locator('#imageGenerate')).toBeDisabled();await page.locator('#externalCostConsent').check();await page.locator('#imageGenerate').click();
  await expect(page.locator('#imageMessage')).toContainText('3Dを生成しました');expect(calls).toBe(1);expect(seen['x-3d-key']).toBe('test-mesh-key');expect(seen['x-ai-key']).toBeUndefined();
  await page.locator('#imageMethod').selectOption('simple');await expect(page.locator('#externalCostLabel')).toBeHidden();await expect(page.locator('#imageGenerate')).toHaveText('選択画像から簡易3Dを生成');
- await page.getByRole('tab',{name:'AI設定',exact:true}).click();await page.locator('#aiLock').click();await expect(page.locator('#threeProvider')).toBeDisabled();
+ await page.getByRole('tab',{name:'AI設定',exact:true}).click();await page.locator('#aiLock').click();await expect(page.locator('#threeProvider')).toBeEnabled();await expect(page.locator('#threeKey')).toBeDisabled();
 });
 
 test('rendered outputs can be reopened and deleted while source uploads create no persistent library',async({page})=>{
@@ -26,4 +26,26 @@ test('rendered outputs can be reopened and deleted while source uploads create n
  await expect(page.getByText('参考資料や模型設定はメモリのみです。',{exact:false})).toBeVisible();
  page.on('dialog',d=>d.accept());
  const url=await page.locator('#outputList a').first().getAttribute('href');await page.locator('#outputList button').first().click();await expect(page.locator('#outputList a[href="'+url+'"]')).toHaveCount(0);expect((await page.request.get(url)).status()).toBe(404);
+});
+
+
+test('locked users can choose every external API and are guided to unlock only credentials',async({page})=>{
+ const errors=[];page.on('pageerror',e=>errors.push(e.message));
+ await page.goto('/#settings');
+ await expect(page.locator('#threeProvider')).toBeEnabled();
+ await expect(page.locator('#threeLockMessage')).toContainText('作成するか');
+ for(const [provider,model] of [['meshy','meshy-t2.5'],['tripo','P1-20260311'],['huggingface','TRELLIS.2']]){
+  await page.locator('#threeProvider').selectOption(provider);await expect(page.locator('#threeModel option').first()).toHaveAttribute('value',model);
+  await page.locator('#threeModel').selectOption(model);
+ }
+ await expect(page.locator('#threeKey')).toBeDisabled();await expect(page.locator('#threeSave')).toBeDisabled();await expect(page.locator('#threeTest')).toBeDisabled();
+ await page.locator('#threeUnlockGuide').click();await expect(page.locator('#aiName')).toBeFocused();
+ await page.locator('#threeProvider').selectOption('tripo');await page.locator('#threeModel').selectOption('P2-20260801');
+ await page.locator('#aiName').fill('Selection profile');await page.locator('#aiPassword').fill('selection-passphrase');await page.locator('#aiCreate').click();
+ await expect(page.locator('#threeKey')).toBeEnabled();await expect(page.locator('#threeUnlockGuide')).toBeHidden();
+ await expect(page.locator('#threeProvider')).toHaveValue('tripo');await expect(page.locator('#threeModel')).toHaveValue('P2-20260801');
+ await page.locator('#threeKey').fill('unsaved-secret');await page.locator('#aiLock').click();
+ await expect(page.locator('#threeKey')).toHaveValue('');await expect(page.locator('#threeProvider')).toBeEnabled();
+ await page.locator('#threeUnlockGuide').click();await expect(page.locator('#aiPassword')).toBeFocused();
+ expect(errors).toEqual([]);
 });
