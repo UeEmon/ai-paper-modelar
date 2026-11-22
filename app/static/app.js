@@ -206,7 +206,7 @@ function clearResearch(message){
   researchRequest++;researchAbort?.abort();researchAbort=null;
   sources=[];sourceQuery="";sourceProject=null;
   el("research").replaceChildren();clearProposals();
-  el("search").disabled=false;researchState(message);
+  el("textSearch").disabled=false;researchState(message);
 }
 window.paperResearch={sync(){
   if(sourceQuery&&(sourceQuery!==el("place").value.trim()||sourceProject!==(window.paperLibrary?.projectId||null)))clearResearch("題材・プロジェクトが変わりました。資料を再検索してください。");
@@ -222,7 +222,7 @@ async function search(){
   clearResearch();const request=researchRequest;
   const q=el("place").value.trim(),project=window.paperLibrary?.projectId||null;
   const controller=new AbortController();researchAbort=controller;
-  el("search").disabled=true;status("公開資料を検索中");
+  el("textSearch").disabled=true;status("公開資料を検索中");
   try{
     if(q.length<2)throw Error("検索語を2文字以上で入力してください。");
     const r=await fetch("/api/research?q="+encodeURIComponent(q)+"&scope="+encodeURIComponent(el("researchScope").value),{signal:controller.signal});
@@ -251,7 +251,7 @@ async function search(){
   }catch(e){
     if(request!==researchRequest||e.name==="AbortError")return;
     text(el("research"),"p",e.message,"warning");researchState("検索できませんでした。以前の検索結果は使用しません。");status("資料検索に失敗");
-  }finally{if(request===researchRequest){el("search").disabled=false;researchAbort=null;}}
+  }finally{if(request===researchRequest){el("textSearch").disabled=false;researchAbort=null;}}
 }
 function applyProposal(proposal, references){
   const d=proposal.design;
@@ -346,7 +346,7 @@ async function pdf(){
   }catch(e){window.alert(e.message);status("PDFに失敗");}
   finally{el("savePdf").disabled=false;}
 }
-el("search").addEventListener("click",search);
+el("textSearch").addEventListener("click",search);
 el("researchScope").addEventListener("change",()=>clearResearch("検索範囲を変更しました。もう一度、資料検索を押してください。"));
 el("place").addEventListener("input",()=>{
   clearResearch("題材を変更しました。資料を再検索してください。");
@@ -365,6 +365,7 @@ el("template").addEventListener("change",()=>{updateTemplateHint();sizes();});
 for(const id of ["sides","topRatio"]){el(id).addEventListener("input",sizes);}
 el("subjectType").addEventListener("change",()=>{
   const subject=el("subjectType").value;
+  clearProposals();
   if(!["architecture","railway"].includes(subject) && el("template").value==="building"){
     el("template").value="box";
   }

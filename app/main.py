@@ -37,6 +37,8 @@ from .generated_models import router as generated_model_router
 app.include_router(generated_model_router)
 from .public_models import router as public_model_router
 app.include_router(public_model_router)
+from .idea_workflow import router as idea_router
+app.include_router(idea_router)
 
 
 @app.middleware("http")

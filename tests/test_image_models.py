@@ -64,8 +64,9 @@ def test_consented_vision_produces_obj_and_existing_mesh_engine_can_unfold(monke
     monkeypatch.setattr(ai.httpx,'AsyncClient',lambda **kw:HTTP_CLIENT(transport=httpx.MockTransport(handler),**kw))
     headers={'X-AI-Provider':provider,'X-AI-Model':'vision-model','X-AI-Key':'test-vision-key'}
     if provider in ai.LOCAL_PROVIDERS:headers|={'X-AI-Endpoint':'http://localhost:11434' if provider=='ollama' else 'http://localhost:1234/v1','X-AI-Vision':'true'}
-    r=client.post('/api/image-model/generate',json={'image_id':image_id,'name':'画像の建物','height_mm':100,'consent':True},headers=headers)
+    r=client.post('/api/image-model/generate',json={'image_id':image_id,'name':'画像の建物','height_mm':100,'consent':True,'subject_type':'architecture','reference_type':'diagram'},headers=headers)
     assert r.status_code==200,r.text
+    assert 'architecture' in sent[0].content.decode() and 'diagram' in sent[0].content.decode()
     data=r.json();assert client.get(data['saved_model']['obj_url']).content==data['obj'].encode()
     assert data['saved_model']['glb_url'] is None
     assert data['estimated'] is True and len(data['components'])==2 and data['size_mm'][1]==100
@@ -120,3 +121,29 @@ def test_invalid_ai_response_is_error_not_a_fabricated_model(monkeypatch):
     monkeypatch.setattr(ai.httpx,'AsyncClient',lambda **kw:HTTP_CLIENT(transport=httpx.MockTransport(handler),**kw))
     r=client.post('/api/image-model/generate',json={'image_id':'a'*32,'consent':True},headers={'X-AI-Provider':'openai','X-AI-Model':'test','X-AI-Key':'test-secret'})
     assert r.status_code==502 and 'test-secret' not in r.text and 'obj' not in r.json()
+
+@pytest.mark.parametrize('mime,extension',[('image/svg+xml','svg'),('application/pdf','pdf')])
+def test_structural_drawings_fetch_only_commons_raster_thumbnails(monkeypatch,mime,extension):
+    calls=[]
+    def handler(request):
+        calls.append(request)
+        if request.url.host=='commons.wikimedia.org':
+            info={'mime':mime,'url':f'https://upload.wikimedia.org/wikipedia/commons/a/ab/Drawing.{extension}',
+                  'thumburl':f'https://thumb.wikimedia.org/wikipedia/commons/thumb/a/ab/Drawing.{extension}/640px-Drawing.{extension}.png',
+                  'descriptionurl':f'https://commons.wikimedia.org/wiki/File:Drawing.{extension}','extmetadata':{}}
+            return httpx.Response(200,json={'query':{'pages':{'1':{'title':f'File:Drawing.{extension}','imageinfo':[info]}}}})
+        assert request.url.host=='thumb.wikimedia.org' and request.url.path.endswith('.png')
+        return httpx.Response(200,content=jpeg())
+    monkeypatch.setattr(images.httpx,'AsyncClient',lambda **kw:HTTP_CLIENT(transport=httpx.MockTransport(handler),**kw))
+    choices=client.get('/api/image-model/images?q=diagram').json()['images']
+    assert len(choices)==1
+    assert client.get(choices[0]['preview_url']).status_code==200 and len(calls)==2
+
+
+@pytest.mark.parametrize('thumb',[None,'https://upload.wikimedia.org/wikipedia/commons/a/ab/Drawing.svg'])
+def test_svg_without_raster_thumbnail_is_not_an_image_candidate(monkeypatch,thumb):
+    def handler(request):
+        info={'mime':'image/svg+xml','url':'https://upload.wikimedia.org/wikipedia/commons/a/ab/Drawing.svg','thumburl':thumb,'descriptionurl':'https://commons.wikimedia.org/wiki/File:Drawing.svg'}
+        return httpx.Response(200,json={'query':{'pages':{'1':{'title':'File:Drawing.svg','imageinfo':[info]}}}})
+    monkeypatch.setattr(images.httpx,'AsyncClient',lambda **kw:HTTP_CLIENT(transport=httpx.MockTransport(handler),**kw))
+    assert client.get('/api/image-model/images?q=diagram').json()['images']==[]

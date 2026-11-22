@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="ja">
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>AI PAPER MODELAR | ペーパークラフトジェネレーター</title><link rel="stylesheet" href="/static/styles.css"></head>
+<title>AI PAPER MODELAR | ペーパークラフトジェネレーター</title><link rel="stylesheet" href="/static/styles.css?v=idea-workflow-1"></head>
 <body>
 <header><div class="brand">▣ <span>AI PAPER MODELAR<small>AIでアイデアと参考資料から紙模型をデザイン</small></span></div><div class="version">MVP 0.5</div></header>
 <main>
@@ -15,8 +15,8 @@
 <button type="button" role="tab" id="tab-settings" aria-controls="panel-settings" aria-selected="false" tabindex="-1">AI設定</button>
 </div>
 <div class="workContext"><span id="workContext">一時作業</span><span id="status" class="status" role="status" aria-live="polite">待機中</span></div>
-<section id="panel-design" class="tabPanel" role="tabpanel" aria-labelledby="tab-design" tabindex="0"><div class="designLayout"><section class="controls"><p class="eyebrow">IDEA & REFERENCES</p><h2>題材と資料からデザインを考える</h2>
-<p class="lead">建築物、乗り物、風景、小物、キャラクター、オリジナル作品を対象に資料調査やAIデザイン提案ができます。基本形状のA4展開図も作成できます。</p>
+<section id="panel-design" class="tabPanel" role="tabpanel" aria-labelledby="tab-design" tabindex="0"><div class="designLayout"><section class="controls"><p class="eyebrow">IDEA & REFERENCES</p><h2>① ジャンルとワードから3Dを作る</h2>
+<p class="lead">ジャンルとワードを指定して構造図・参考画像を探し、3Dモデルを作成します。同じワードの公開3Dがあれば取得する方法も選べます。最後に3Dモデルから展開図を作ります。</p>
 <label for="subjectType">制作ジャンル</label>
 <select id="subjectType">
 <option value="architecture">建築物・構造物</option>
@@ -28,10 +28,11 @@
 <option value="railway">鉄道模型・ジオラマ</option>
 <option value="other">その他</option>
 </select>
-<label for="researchScope">資料検索の範囲</label><select id="researchScope"><option value="all">Web＋Wikipedia（広く探す）</option><option value="web">Webのみ（公式サイト・一般ページ等）</option><option value="wikipedia">Wikipediaのみ</option></select>
+
 <label for="place">対象の名称・アイデア</label>
-<div class="inline"><input id="place" value="小さな洋館" placeholder="例：灯台、バス、城、動物、創作の建物" maxlength="120"><button id="search" class="secondary">資料検索</button></div>
-<p class="muted">入力語をBingのWeb検索とWikipediaへ送信し、公開情報を探します。使いたい資料を選んでAI提案に渡せます。リンク先本文・画像の取得や、実寸・利用権の確認は自動では行いません。</p>
+<div class="inline"><input id="place" value="小さな洋館" placeholder="例：灯台、バス、城、動物、創作の建物" maxlength="120"><button id="search" class="secondary">資料・公開3Dを検索</button></div>
+<label for="ideaReferenceKind">探す資料</label><select id="ideaReferenceKind"><option value="both">構造図・図面と参考画像</option><option value="diagram">構造図・図面を優先</option><option value="photo">参考画像・写真を優先</option></select>
+<p class="muted">検索はWikimedia Commonsの構造図・画像と、Poly Havenの公開3D候補を探します。資料の選択後に3Dを作り、そのモデルから展開図を作成します。</p><details id="textProposalDetails" open><summary>補助：Web資料・手持ち画像・文章提案を使う</summary><div class="sectionhead"><span class="eyebrow">補助：Web資料と文章提案</span><button id="textSearch" type="button" class="secondary">Web資料を検索</button></div><label for="researchScope">資料検索の範囲</label><select id="researchScope"><option value="all">Web＋Wikipedia（広く探す）</option><option value="web">Webのみ（公式サイト・一般ページ等）</option><option value="wikipedia">Wikipediaのみ</option></select><p class="muted">文章で調べる場合はBing・Wikipediaも検索できます。こちらの資料は文章提案用です。</p>
 <p id="researchState" class="muted" role="status">資料未選択。検索後、AIで使う資料を選んでください。</p>
 <div id="research" aria-live="polite"></div>
 <div class="sectionhead"><span class="eyebrow">参考資料</span></div>
@@ -65,8 +66,22 @@
 <label class="style"><input type="radio" name="style" value="easy"><span>簡単組立<small>部品数を減らす</small></span></label>
 </div>
 <div id="proposals" aria-live="polite"></div>
-<div class="nextStep"><p>デザインが決まったら、基本形状と寸法を指定します。</p><button type="button" data-open-tab="shape">基本形状の展開図へ進む →</button></div></section>
-<aside class="workflowGuide"><h3>作り方を選ぶ</h3><p>資料やAIでアイデアを考えたいときは、このタブを使います。AIは資料を参考に、スタイル・基本形状・推定寸法を提案します。</p><button type="button" class="secondary" data-open-tab="settings">使うAIを設定</button><h3>寸法がわかっている</h3><p>箱・建物・円柱などの形から、寸法を指定して直接作れます。</p><button type="button" class="secondary" data-open-tab="shape">基本形状から作る</button><h3>3Dモデルを持っている</h3><p>OBJ・STLファイルから展開図を作れます。</p><button type="button" class="secondary" data-open-tab="mesh">3Dモデルを開く</button><h3>画像から立体を考えたい</h3><p>検索画像の特徴をもとに、AIで基本立体を組み合わせた簡易3Dを作れます。</p><button type="button" class="secondary" data-open-tab="image3d">画像から3Dを作る</button><h3>作業を保存したい</h3><p>生成した3Dモデルと完成した展開図をサーバーに保存できます。プロジェクトは一時的な作業用です。</p><button type="button" class="secondary" data-open-tab="projects">プロジェクトを管理</button></aside></div></section>
+</details><div class="nextStep"><p>寸法が分かる場合は、基本形状から直接作る方法も選べます。</p><button type="button" data-open-tab="shape">基本形状の展開図へ進む →</button></div></section>
+<aside class="workflowGuide ideaWorkflow"><h2>② 資料から作る／公開3Dを使う</h2>
+<ol class="ideaSteps"><li>ジャンル・ワードで資料を検索</li><li>構造図・画像から3Dを作成、または公開3Dを取得</li><li>3Dプレビューで形状を確認</li><li>その3Dモデルから展開図を作成</li></ol>
+<div class="twocol"><div><label for="ideaMethod">画像から3Dを作る方式</label><select id="ideaMethod"><option value="simple">既存AIで簡易3D</option><option value="external">外部3D生成API</option></select></div><div><label for="ideaHeight">完成する3Dの高さ（mm）</label><input id="ideaHeight" type="number" min="20" max="300" value="120"></div></div>
+<button type="button" class="secondary" data-open-tab="settings">3D生成AIを設定</button>
+<p id="ideaMessage" role="status">ジャンルとワードを入力し、「資料・公開3Dを検索」を押してください。</p>
+<h3>構造図・図面の候補</h3><div id="ideaDiagrams" class="imageCandidates"></div>
+<h3>参考画像の候補</h3><div id="ideaPhotos" class="imageCandidates"></div>
+<p class="muted">使う資料を選ぶと3D作成画面へ進みます。画像送信への確認後に生成します。検索結果は図面の正確さ・利用許可・実寸を保証しません。</p>
+<h3>見つかった公開3Dオブジェクト</h3><label class="aiConsent"><input id="ideaPublicConsent" type="checkbox"><span>公開モデルの出典・利用条件を確認し、選択する3Dを取得・保存する</span></label><div id="ideaPublicModels"></div>
+<h3>手持ちの3Dモデルを使う</h3><p class="muted">検索やAIを使わず、OBJ/STLをアップロードして展開できます。最大5MB・500三角形。原本は保存しません。</p>
+<label for="ideaMeshFile">手持ちのOBJ/STL</label><input id="ideaMeshFile" type="file" accept=".obj,.stl,model/stl">
+<div class="twocol"><div><label for="ideaMeshUnit">座標の単位</label><select id="ideaMeshUnit"><option value="mm">mm</option><option value="cm">cm</option><option value="m">m</option></select></div><div><label for="ideaMeshScale">縮尺 1/X</label><input id="ideaMeshScale" type="number" min="1" max="500" value="1"></div></div>
+<button id="ideaMeshUnfold" type="button" class="secondary">アップロードした3Dから展開図を作る</button>
+<p class="muted">作成・取得した3Dはプレビューから「この3Dモデルの展開図を作る」を選びます。保存済み3Dからも再展開できます。</p>
+<button type="button" class="secondary" data-open-tab="projects">保存済み3D・展開図を開く</button></aside></div></section>
 <section id="panel-shape" class="tabPanel" role="tabpanel" aria-labelledby="tab-shape" tabindex="0" hidden><div class="shapeLayout"><section class="controls"><p class="eyebrow">BASIC SHAPES</p><h2>寸法から展開図を作る</h2>
 <p class="lead">基本形状・縮尺・寸法を指定して生成します。AI設定や資料の登録は不要です。</p>
 <div class="twocol">
@@ -132,7 +147,7 @@
 <p id="publicModelMessage" role="status">モデル名を入力して検索してください。検索だけではモデル本体を取得しません。</p><div id="publicModelResults"></div><button id="publicModelMore" class="secondary" type="button" hidden>次の12件</button>
 </section><section class="meshImport panel" aria-label="OBJ/STLモデルの展開">
 <div class="meshSectionTitle">
-  <div><p class="eyebrow">3D MESH UNFOLDING</p><h2>3Dモデルの展開図</h2></div>
+  <div><p class="eyebrow">3D MESH UNFOLDING</p><h2>④ 3Dモデルから展開図を作る</h2></div>
   <span class="status">OBJ / STL</span>
 </div>
 <p class="lead">手持ちのOBJ・STLモデルを三角形に展開し、切断線・折線・接着タブ付きのA4用紙に配置します。</p>
@@ -176,7 +191,7 @@
 <button type="button" class="secondary imageSetup" data-open-tab="settings">画像対応AIを設定</button>
 <p id="imageMessage" role="status" aria-live="polite">画像を検索し、1枚選んでください。</p>
 </section><section class="workspace">
-<h2>3Dプレビュー</h2><button type="button" class="secondary" data-open-tab="projects">保存済み3Dモデルを開く</button><div class="image3dViewer"><canvas id="imageCanvas" tabindex="0" role="img" aria-label="3Dモデル。矢印キーまたはドラッグで回転、プラス・マイナスで拡大縮小"></canvas><p id="imagePlaceholder">生成したモデルをここで回して確認できます。</p></div>
+<h2>③ 3Dモデルを確認</h2><button type="button" class="secondary" data-open-tab="projects">保存済み3Dモデルを開く</button><div class="image3dViewer"><canvas id="imageCanvas" tabindex="0" role="img" aria-label="3Dモデル。矢印キーまたはドラッグで回転、プラス・マイナスで拡大縮小"></canvas><p id="imagePlaceholder">生成したモデルをここで回して確認できます。</p></div>
 <div class="bar"><button id="imageResetView" type="button" class="secondary">視点をリセット</button><label for="imageZoom">拡大・縮小</label><input id="imageZoom" type="range" min="0.5" max="2.5" value="1" step="0.1"></div>
 <div id="imageModelInfo" class="result" hidden></div>
 <label class="meshCheck"><input id="imageSaveOriginal" type="checkbox">展開時に生成OBJを一時作業へ追加する（メモリのみ）</label>
@@ -263,6 +278,7 @@
 <script defer src="/static/projects.js"></script>
 <script defer src="/static/outputs.js?v=public-models-1"></script>
 <script defer src="/static/mesh.js"></script>
-<script defer src="/static/image-model.js?v=saved-models-1"></script>
+<script defer src="/static/image-model.js?v=idea-workflow-1"></script>
 <script defer src="/static/public-models.js?v=public-models-1"></script>
+<script defer src="/static/idea-workflow.js?v=idea-workflow-1"></script>
 </body></html>

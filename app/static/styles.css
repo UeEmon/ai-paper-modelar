@@ -77,3 +77,6 @@ main{display:block;margin-top:26px}
 #outputList p{overflow-wrap:anywhere;display:flex;gap:12px;align-items:center;flex-wrap:wrap}
 .savedGeneratedModel{padding:14px 0;border-bottom:1px solid #dce4dd;overflow-wrap:anywhere}
 .savedGeneratedModel .projectButtons{align-items:center}
+.workflowGuide.ideaWorkflow{position:static;background:#fff;border:1px solid #dce4dd;border-radius:15px;padding:20px;min-width:0}
+.ideaSteps{padding-left:20px;line-height:1.9}.ideaWorkflow .imageCandidates{grid-template-columns:repeat(auto-fit,minmax(160px,1fr))}.ideaWorkflow .imageCandidate{min-width:0;overflow-wrap:anywhere}.ideaWorkflow .imageCandidate button{white-space:normal}.ideaWorkflow h3{margin-top:22px}
+#textProposalDetails{margin-top:18px;border-top:1px solid #dce4dd;padding-top:14px}#textProposalDetails>summary{cursor:pointer;color:#245f52;font-weight:700;line-height:1.7}
