@@ -60,9 +60,8 @@
       const ciphertext=await this.crypto.subtle.encrypt({name:"AES-GCM",iv,additionalData:encode.encode(id)},key,encode.encode(JSON.stringify(data)));
       return {version:1,name,salt:b64(salt),iv:b64(iv),ciphertext:b64(new Uint8Array(ciphertext))};
     }
-    async save(provider,model,apiKey,options={}){
+    prepare(provider,model,apiKey,options={}){
       if(!this.data)throw Error("プロファイルを解除してください。");
-      const epoch=this.epoch,id=this.id;
       const data=structuredClone(this.data);
       if(provider!=="none"){
         const local=isLocal(provider);
@@ -78,16 +77,20 @@
           data.providers[provider].vision=options.vision===true;
         }
       }
-      data.provider=provider;
+      data.provider=provider;return data;
+    }
+    async save(provider,model,apiKey,options={}){
+      const epoch=this.epoch,id=this.id;
+      const data=this.prepare(provider,model,apiKey,options);
       const old=JSON.parse(this.storage.getItem(PREFIX+id));
       const record=await this.encrypt(id,old.name,this.salt,this.key,data);
       if(epoch!==this.epoch)throw Error("操作が切り替わりました。");
       this.storage.setItem(PREFIX+id,JSON.stringify(record));this.data=data;
     }
     remove(id){this.lock();this.storage.removeItem(PREFIX+id);}
-    headers(){
-      if(!this.data)return {};
-      const provider=this.data.provider,config=this.data.providers[provider];
+    headers(data=this.data){
+      if(!data)return {};
+      const provider=data.provider,config=data.providers[provider];
       if(provider==="none"||!config)return {};
       const headers={"X-AI-Provider":provider,"X-AI-Model":config.model};
       if(config.apiKey)headers["X-AI-Key"]=config.apiKey;

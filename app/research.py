@@ -10,7 +10,7 @@ async def research(name: str):
     params = {
         "action": "query", "generator": "search", "gsrsearch": name,
         "gsrlimit": 6, "prop": "info|extracts", "inprop": "url",
-        "exintro": "1", "explaintext": "1", "exsentences": "2",
+        "exintro": "1", "explaintext": "1", "exchars": "1200",
         "format": "json"
     }
     async with httpx.AsyncClient(timeout=15, follow_redirects=False,
@@ -26,7 +26,7 @@ async def research(name: str):
                 "title": name[:180],
                 "url": page.get("fullurl") or
                        "https://ja.wikipedia.org/wiki/" + quote(name.replace(" ", "_")),
-                "summary": re.sub(r"\s+", " ", unescape(page.get("extract", "")))[:330],
+                "summary": re.sub(r"\s+", " ", unescape(page.get("extract", "")))[:1200],
                 "source_type": "Wikipedia (secondary reference)",
                 "dimensions_verified": False,
                 "reuse_rights_verified": False
