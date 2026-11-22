@@ -104,3 +104,16 @@ def test_errors_never_include_key_or_source(monkeypatch):
     monkeypatch.setattr(ext.httpx,'AsyncClient',lambda **kw:ORIGINAL(transport=httpx.MockTransport(lambda req:httpx.Response(401,text='test-only-key private-source')),**kw))
     r=client.post('/api/3d/test',headers=config())
     assert r.status_code==502 and 'test-only-key' not in r.text and 'private-source' not in r.text
+
+def test_hf_quota_rejection_explains_recovery_without_leaking_remote_error():
+    from fastapi import HTTPException
+    def handler(req):
+        if req.method=='POST':return httpx.Response(200,json={'event_id':'1'})
+        return httpx.Response(200,text='data: '+json.dumps({'event_id':'1','msg':'process_completed','success':False,'output':{'error':'Quota exceeded test-only-key private-path'}})+'\n\n')
+    async def run():
+        async with ORIGINAL(transport=httpx.MockTransport(handler)) as c:
+            with pytest.raises(HTTPException) as caught:
+                await ext.hf_call(c,{'dependencies':[{'api_name':'image_to_3d','id':1}]},'session','image_to_3d',[],'test-only-key')
+            assert caught.value.status_code==429
+            assert '無料GPU枠' in caught.value.detail and 'test-only-key' not in caught.value.detail and 'private-path' not in caught.value.detail
+    asyncio.run(run())

@@ -158,7 +158,7 @@ Docker内の `localhost` はコンテナ自身です。Mac/Windows等のホス�
 
 | 外部API | 対応モデル | 利用枠 |
 |---|---|---|
-| Hugging Face Spaces | Microsoft TRELLIS.2 | 無料枠あり。トークン任意、日次上限・待ち行列・サービス停止の可能性あり。契約による追加利用は提供元の条件に従う |
+| Hugging Face Spaces | Microsoft TRELLIS.2 | 無料枠あり。トークン任意、日次上限・待ち行列・サービス停止の可能性あり。匿名枠が不足する場合は無料アカウントのHFトークンを設定。契約による追加利用は提供元の条件に従う |
 | Meshy | T2.5 / T2 / 7.1 / 6 / 6 Lite | APIキーと有料API利用権限・残高が必要 |
 | Tripo | P1 / P2 / v3.1 / v3.0 / v2.5 | APIキーと利用枠・残高が必要 |
 

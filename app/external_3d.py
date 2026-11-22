@@ -106,7 +106,11 @@ async def hf_call(c,config,session,name,data,key):
             message=json.loads(line[5:])
             if message.get('event_id')!=event:continue
             if message.get('msg')=='process_completed':
-                if message.get('success') is not True:raise ValueError('Space generation failed')
+                if message.get('success') is not True:
+                    error=str(message.get('output',{}).get('error','')).lower()
+                    if 'quota' in error:
+                        raise HTTPException(429,'Hugging Faceの無料GPU枠が不足しています。HFトークンを設定するか、枠の回復を待ってください。有料サービスへの自動切替は行いません。')
+                    raise ValueError('Space generation failed')
                 return message['output']['data']
             if message.get('msg') in {'queue_full','unexpected_error'}:raise ValueError('Space queue failed')
     raise ValueError('Space stream ended')
@@ -147,7 +151,7 @@ async def generate(c,provider,model,key,jpeg):
     finally:
         # Best effort removal of the remote session's generated intermediates.
         try:await hf_call(c,config,session,'end_session',[],key)
-        except (httpx.HTTPError,ValueError,KeyError,TypeError):pass
+        except (httpx.HTTPError,ValueError,KeyError,TypeError,HTTPException):pass
 
 
 def mesh_result(data,height):
