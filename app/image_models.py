@@ -75,7 +75,12 @@ async def search_images(q):
     found=[]
     for page in sorted(pages.values(),key=lambda item:item.get("index",0)):
         info=(page.get("imageinfo") or [{}])[0]
-        if info.get("mime") not in {"image/jpeg","image/png","image/webp"}:continue
+        mime=info.get("mime")
+        if mime not in {"image/jpeg","image/png","image/webp"}:
+            # Commons rasterizes SVG/PDF drawings. Never fetch the vector/PDF original.
+            thumb=info.get("thumburl")
+            if (mime not in {"image/svg+xml","application/pdf"} or not isinstance(thumb,str)
+                    or not urlsplit(thumb).path.lower().endswith((".png",".jpg",".jpeg",".webp"))):continue
         try:remote=image_url(info.get("thumburl") or info.get("url"))
         except ValueError:continue
         source=public_url(info.get("descriptionurl"))
