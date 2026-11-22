@@ -187,6 +187,23 @@ const paperLibrary = {
         else this.selected.delete(item.id);
       });
       use.appendChild(checkbox);text(use,"span","AI参照");actions.appendChild(use);
+      if(item.kind==="mesh"){
+        use.style.display="none";
+        const unfold=text(actions,"button","この3Dモデルを展開","secondary");
+        unfold.type="button";
+        unfold.addEventListener("click",async()=>{
+          unfold.disabled=true;
+          try{
+            const response=await fetch(item.original_url);
+            if(!response.ok)throw Error("保存済みモデルを取得できません");
+            const file=new File([await response.blob()],item.name,
+              {type:"application/octet-stream"});
+            if(!window.meshWorkbench)throw Error("メッシュ展開画面が読み込まれていません");
+            await window.meshWorkbench.loadFile(file);
+          }catch(error){window.alert(error.message);}
+          finally{unfold.disabled=false;}
+        });
+      }
       const original=text(actions,"a","原本保存");
       original.href=item.original_url;
       original.setAttribute("download",item.name);

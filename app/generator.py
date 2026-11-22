@@ -224,7 +224,7 @@ def _num_tiles(length: float, area: float) -> int:
     return 1 if length <= area else 1 + ceil((length - area) / (area - OVERLAP))
 
 
-def page_jobs(spec: ModelSpec) -> list[dict]:
+def page_jobs(spec: ModelSpec, parts: list[dict] | None = None) -> list[dict]:
     """Shelf-pack small parts; tile larger parts with 5 mm joining overlap.
 
     Returns *printable pages*, each containing one or more placed source parts.
@@ -242,7 +242,7 @@ def page_jobs(spec: ModelSpec) -> list[dict]:
             placed = []
         cursor_x = cursor_y = shelf_height = 0.0
 
-    for part in build_parts(spec):
+    for part in (parts if parts is not None else build_parts(spec)):
         nx = _num_tiles(part["w"], AREA_W)
         ny = _num_tiles(part["h"], AREA_H)
         if nx > 1 or ny > 1:
@@ -328,8 +328,8 @@ def _svg_graphic(g: dict) -> str:
     return '<polygon points="' + points + '" fill="' + fill + '"' + s + '/>'
 
 
-def render_svg(spec: ModelSpec, page: int = 0) -> str:
-    pages = page_jobs(spec)
+def render_svg(spec: ModelSpec, page: int = 0, *, parts: list[dict] | None = None) -> str:
+    pages = page_jobs(spec, parts)
     if page < 0 or page >= len(pages):
         raise IndexError("Page not found")
     label = escape(spec.name + " | 1/" + str(spec.scale))
@@ -376,7 +376,8 @@ def render_svg(spec: ModelSpec, page: int = 0) -> str:
     return "".join(output)
 
 def _pdf_graphic(c: canvas.Canvas, g: dict, shift_x: float, shift_y: float) -> None:
-    c.setStrokeColor(HexColor(g["stroke"]))
+    stroke_enabled = g["stroke"] != "none"
+    c.setStrokeColor(HexColor(g["stroke"] if stroke_enabled else "#333333"))
     c.setLineWidth(0.25 * mm)
     c.setDash(2 * mm, 1 * mm) if g["kind"] == "fold" else c.setDash()
     fill = g.get("fill", "none")
@@ -391,9 +392,10 @@ def _pdf_graphic(c: canvas.Canvas, g: dict, shift_x: float, shift_y: float) -> N
 
     if g["type"] == "rect":
         c.rect(px(g["x"]), py(g["y"] + g["h"]), g["w"] * mm, g["h"] * mm,
-               fill=int(fill != "none"), stroke=1)
+               fill=int(fill != "none"), stroke=int(stroke_enabled))
     elif g["type"] == "line":
-        c.line(px(g["x1"]), py(g["y1"]), px(g["x2"]), py(g["y2"]))
+        if stroke_enabled:
+            c.line(px(g["x1"]), py(g["y1"]), px(g["x2"]), py(g["y2"]))
     else:
         p = c.beginPath()
         first = g["points"][0]
@@ -401,14 +403,14 @@ def _pdf_graphic(c: canvas.Canvas, g: dict, shift_x: float, shift_y: float) -> N
         for x, y in g["points"][1:]:
             p.lineTo(px(x), py(y))
         p.close()
-        c.drawPath(p, fill=int(fill != "none"), stroke=1)
+        c.drawPath(p, fill=int(fill != "none"), stroke=int(stroke_enabled))
     c.setDash()
 
 
-def render_pdf(spec: ModelSpec) -> bytes:
+def render_pdf(spec: ModelSpec, *, parts: list[dict] | None = None) -> bytes:
     output = BytesIO()
     c = canvas.Canvas(output, pagesize=A4)
-    pages = page_jobs(spec)
+    pages = page_jobs(spec, parts)
     for index, page in enumerate(pages):
         c.setFont("Helvetica", 11)
         c.drawString(12 * mm, (PAGE_H - 17) * mm,

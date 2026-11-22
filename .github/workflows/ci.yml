@@ -38,6 +38,8 @@ jobs:
         run: node --check app/static/app.js
       - name: Project library JavaScript syntax check
         run: node --check app/static/projects.js
+      - name: Mesh frontend JavaScript syntax check
+        run: node --check app/static/mesh.js
 
   image:
     needs: test

@@ -3,7 +3,7 @@
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>AI PAPER MODELAR | ペーパークラフトジェネレーター</title><link rel="stylesheet" href="/static/styles.css"></head>
 <body>
-<header><div class="brand">▣ <span>AI PAPER MODELAR<small>AIでアイデアと参考資料から紙模型をデザイン</small></span></div><div class="version">MVP 0.3</div></header>
+<header><div class="brand">▣ <span>AI PAPER MODELAR<small>AIでアイデアと参考資料から紙模型をデザイン</small></span></div><div class="version">MVP 0.5</div></header>
 <main>
 <section class="controls">
 <section class="projectEditor" aria-label="保存済み制作プロジェクト">
@@ -120,16 +120,47 @@
 <button id="generate" class="mainbutton">この条件でA4展開図を生成</button>
 </section>
 <section class="workspace">
+<section class="meshImport panel" aria-label="OBJ/STLモデルの展開">
+<div class="meshSectionTitle">
+  <div><p class="eyebrow">05 / 3D MESH UNFOLDING</p><h2>3Dモデルの展開図</h2></div>
+  <span class="status">OBJ / STL</span>
+</div>
+<p class="lead">手持ちのOBJ・STLモデルを三角形に展開し、切断線・折線・接着タブ付きのA4用紙に配置します。</p>
+<label for="meshFile">3Dモデルファイル（最大5MB、三角形500面以内）</label>
+<input id="meshFile" type="file" accept=".obj,.stl,model/stl">
+<div class="meshFields">
+<div><label for="meshUnit">モデル座標の単位</label>
+<select id="meshUnit"><option value="mm">mm</option><option value="cm">cm</option><option value="m">m</option></select></div>
+<div><label for="meshScale">縮尺 1/X</label><input id="meshScale" type="number" min="1" max="500" step="1" value="1"></div>
+</div>
+<label class="meshCheck"><input type="checkbox" id="meshTabs" checked>接着タブを追加する</label>
+<label class="meshCheck"><input type="checkbox" id="meshSaveOriginal" checked>制作プロジェクトを選択中ならOBJ/STL原本も保存する</label>
+<button class="mainbutton" id="meshGenerate">OBJ/STLを読み込んで展開</button>
+<div id="meshResults" class="meshResults" aria-live="polite"></div>
+<div id="meshViewer" hidden>
+<div class="meshPaper"><img id="meshPreview" alt="3Dメッシュから作成したA4展開図"></div>
+<div class="meshControls">
+<button id="meshPrevious" class="secondary">前のページ</button>
+<span id="meshPageCount">— / —</span>
+<button id="meshNext" class="secondary">次のページ</button>
+<button id="meshSvg" class="secondary">SVG保存</button>
+<button id="meshPdf">PDF保存</button>
+</div>
+</div>
+<p class="muted">展開処理はローカルサーバーで実行します。一時ジョブに原本は保管しません。制作プロジェクトへの保存を選択した場合のみ原本が残り、生成結果は1時間で失効します。非多様体メッシュや過密なメッシュは修復・簡略化してください。自動展開の組立品質は保証されません。</p>
+</section>
+
 <div class="workhead"><div><p class="eyebrow">04 / WORKSPACE</p><h2>A4実寸プレビュー</h2></div><span id="status" class="status">待機中</span></div>
 <div class="preview"><div id="placeholder" class="placeholder"><span>▧</span><p>「展開図を生成」でプレビューを表示</p></div><img id="drawing" alt="紙模型展開図のA4プレビュー" hidden></div>
 <div class="bar"><div><button id="prev" class="secondary" disabled>前へ</button><span id="page">— / —</span><button id="next" class="secondary" disabled>次へ</button></div>
 <div><button id="saveSvg" class="secondary" disabled>SVG保存</button><button id="savePdf" disabled>PDF保存</button></div></div>
 <aside><h3>印刷と組立ガイド</h3><p>A4用紙に倍率100%で印刷し、下部の50mm基準線を定規で測ってください。「用紙サイズに合わせる」はオフにします。</p>
 <p>実線は切断、破線は折り目。窓や扉は印刷による表現です。大きなパーツは5mm重ねて貼り合わせます。</p>
-<p>展開図は入力寸法から生成する基本形状です。紙厚補正や任意の3Dモデル・写真からの自動展開は未対応です。円柱は直径、正多角形は外接円直径を幅として入力します。</p></aside>
+<p>この上の展開図は入力寸法から生成する基本形状です。OBJ/STLの三角面展開には「3D MESH UNFOLDING」を使ってください。紙厚補正や写真からの3D復元は未対応です。</p></aside>
 </section>
 </main>
 <footer>AI Paper Modelar · 汎用ペーパークラフト試作版 · 参考資料の使用条件をご確認ください。</footer>
 <script defer src="/static/app.js"></script>
 <script defer src="/static/projects.js"></script>
+<script defer src="/static/mesh.js"></script>
 </body></html>
