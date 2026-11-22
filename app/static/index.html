@@ -182,7 +182,6 @@
 <fieldset id="aiEditor" disabled>
 <legend>プロファイルのAI設定</legend>
 <label for="aiProvider">プロバイダー</label><select id="aiProvider"><option value="none">使わない（定型案）</option><option value="openai">OpenAI</option><option value="gemini">Gemini</option><option value="anthropic">Anthropic</option><option value="ollama">Ollama（ローカル）</option><option value="local_openai">OpenAI互換（ローカル / LM Studio等）</option></select>
-<label for="aiModel">モデルID（利用可能なIDを入力）</label><input id="aiModel" maxlength="200" autocomplete="off" spellcheck="false">
 <div id="aiLocal" hidden>
 <label for="aiEndpoint">ローカルLLMの接続先URL</label><input id="aiEndpoint" type="url" maxlength="2048" autocomplete="off" spellcheck="false">
 <p class="muted">アプリサーバーから接続します。同じPCなら localhost、Docker利用時は host.docker.internal を指定してください。別PC上のアプリから、ブラウザ側PCのlocalhostには接続できません。</p>
@@ -190,6 +189,11 @@
 <p class="muted">通常はテキストのみ。画像を送るには、資料欄のAI参照許可も必要です。接続先が許可されていない場合はREADMEの設定を確認してください。</p>
 </div>
 <label id="aiKeyHint" for="aiKey">APIキー（空欄なら選択先の保存済みキーを維持）</label><input id="aiKey" type="password" maxlength="512" autocomplete="off" spellcheck="false">
+<label for="aiModelSelect">モデルを選ぶ</label>
+<div class="modelPicker"><select id="aiModelSelect" aria-describedby="aiModelsMessage"><option value="">一覧を取得して選択</option></select><button id="aiModels" type="button" class="secondary">モデル一覧を取得</button></div>
+<p id="aiModelsMessage" class="muted" role="status">プロバイダーとAPIキー（ローカルは接続先）を設定して一覧を取得してください。</p>
+<label for="aiModel">モデルID（選択結果・手入力）</label><input id="aiModel" maxlength="200" autocomplete="off" spellcheck="false">
+
 <div class="projectButtons"><button id="aiTest" type="button" class="secondary">接続テスト</button><button id="aiSave" type="button">接続を確認して保存・使用</button></div>
 <p class="muted">保存時に選択モデルへ短いテストを送り、成功後に保存します。資料は送信しません。クラウドAIでは少量のAPI利用料が発生する場合があります。</p>
 <p class="muted">保存後の設定をAI提案に使用します。プロバイダーごとのモデルとキーを保持します。</p>

@@ -10,7 +10,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
 
-from .ai import ProposalRequest, proposals, credentials_from_headers, check_connection
+from .ai import ProposalRequest, proposals, credentials_from_headers, check_connection, available_models
 from .generator import ModelSpec, render_pdf, render_svg, summary
 from .research import research
 from .senrolab import router as senrolab_router
@@ -37,7 +37,7 @@ async def security_headers(request: Request, call_next):
         )
     response.headers["Referrer-Policy"] = "no-referrer"
     response.headers["X-Content-Type-Options"] = "nosniff"
-    if request.url.path in {"/api/proposals", "/api/ai/test"}:
+    if request.url.path in {"/api/proposals", "/api/ai/test", "/api/ai/models"}:
         response.headers["Cache-Control"] = "no-store"
     return response
 
@@ -47,7 +47,7 @@ async def security_headers(request: Request, call_next):
 async def validation_error(request: Request, exc: RequestValidationError):
     if request.url.path.startswith("/v1/"):
         return JSONResponse({"error": "入力が正しくありません"}, status_code=400)
-    if request.url.path in {"/api/proposals", "/api/ai/test"}:
+    if request.url.path in {"/api/proposals", "/api/ai/test", "/api/ai/models"}:
         return JSONResponse({"detail": "入力値を確認してください。"}, status_code=422)
     return await request_validation_exception_handler(request, exc)
 
@@ -99,6 +99,19 @@ async def test_ai_connection(request: Request):
     except ValueError:
         return JSONResponse({"ok": False, "message": "AI設定を確認してください。接続先はサーバーの許可URLに限られます。"}, status_code=400)
     code, result = await check_connection(credentials)
+    return JSONResponse(result, status_code=code)
+
+
+@app.post("/api/ai/models")
+async def list_ai_models(request: Request):
+    try:
+        credentials = credentials_from_headers({**request.headers,
+            "x-ai-model": "model-list"})
+        if credentials is None:
+            raise ValueError("Missing credentials")
+    except ValueError:
+        return JSONResponse({"ok": False, "message": "AI設定を確認してください。モデル一覧の取得にはプロバイダーとキー（ローカルは任意）が必要です。"}, status_code=400)
+    code, result = await available_models(credentials)
     return JSONResponse(result, status_code=code)
 
 

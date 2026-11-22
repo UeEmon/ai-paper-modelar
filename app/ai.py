@@ -394,3 +394,74 @@ async def check_connection(credentials: AICredentials):
         return 504, {"ok": False, "message": "接続テストが時間切れになりました。ローカルモデルの読み込みやサーバーの状態を確認してください。"}
     except (httpx.HTTPError, ValueError, TypeError, KeyError):
         return 502, {"ok": False, "message": "接続または応答の確認に失敗しました。接続先とAIサーバーの起動状態を確認してください。"}
+
+
+async def available_models(credentials: AICredentials):
+    """Return a bounded catalogue from a fixed/approved provider URL, without generation."""
+    provider, key = credentials.provider, credentials.api_key
+    local = provider in LOCAL_PROVIDERS
+    endpoint = local_endpoint(credentials.endpoint) if local else ""
+    auth = {"Authorization": "Bearer " + key} if key else {}
+    params = {}
+    if provider == "openai":
+        url, field_name = "https://api.openai.com/v1/models", "data"
+    elif provider == "gemini":
+        url, field_name = "https://generativelanguage.googleapis.com/v1beta/models", "models"
+        auth, params = {"x-goog-api-key": key}, {"pageSize": 1000}
+    elif provider == "anthropic":
+        url, field_name = "https://api.anthropic.com/v1/models", "data"
+        auth = {"x-api-key": key, "anthropic-version": "2023-06-01"}
+        params = {"limit": 1000}
+    else:
+        url, field_name = (endpoint + "/api/tags", "models") if provider == "ollama" else (endpoint + "/models", "data")
+    models, cursors, truncated = {}, set(), False
+    pattern = r"[A-Za-z0-9][A-Za-z0-9._:/-]{0,199}" if local else r"[A-Za-z0-9][A-Za-z0-9._:-]{0,119}"
+    try:
+        async with asyncio.timeout(20), httpx.AsyncClient(timeout=20, trust_env=not local, follow_redirects=False) as client:
+            for page in range(5):
+                response = await client.get(url, headers=auth, params=params)
+                response.raise_for_status()
+                data = response.json()
+                if not isinstance(data, dict) or not isinstance(data.get(field_name), list):
+                    raise ValueError("Unexpected catalogue")
+                entries = data[field_name]
+                for item in entries:
+                    if not isinstance(item, dict):
+                        continue
+                    if provider == "gemini":
+                        if "generateContent" not in (item.get("supportedGenerationMethods") or []):
+                            continue
+                        model_id = item.get("name", "").removeprefix("models/") if isinstance(item.get("name"), str) else ""
+                    else:
+                        model_id = (item.get("name") or item.get("model")) if provider == "ollama" else item.get("id")
+                    if not isinstance(model_id, str) or not re.fullmatch(pattern, model_id) or (key and key in model_id):
+                        continue
+                    label = item.get("display_name") or item.get("displayName") or model_id
+                    label = label if isinstance(label, str) else model_id
+                    models[model_id] = {"id": model_id, "name": (label.replace(key, "[redacted]") if key else label)[:180]}
+                    if len(models) >= 1000:
+                        truncated = True
+                        break
+                cursor = data.get("nextPageToken") if provider == "gemini" else (
+                    data.get("last_id") if provider == "anthropic" and data.get("has_more") else None)
+                if provider == "anthropic" and data.get("has_more") and not cursor:
+                    truncated = True
+                if truncated or not cursor:
+                    break
+                if not isinstance(cursor, str) or len(cursor) > 2048 or cursor in cursors or (key and key in cursor):
+                    truncated = True
+                    break
+                cursors.add(cursor)
+                params["pageToken" if provider == "gemini" else "after_id"] = cursor
+                if page == 4:
+                    truncated = True
+        return 200, {"ok": True, "models": sorted(models.values(), key=lambda m: m["id"]), "truncated": truncated}
+    except httpx.HTTPStatusError as exc:
+        status = exc.response.status_code
+        message = ("認証に失敗しました。APIキーとモデル一覧の閲覧権限を確認してください。" if status in {401, 403}
+                   else "モデル一覧を取得できません。接続先・APIの対応状況・利用制限を確認してください。")
+        return 400, {"ok": False, "message": message}
+    except (httpx.TimeoutException, TimeoutError):
+        return 504, {"ok": False, "message": "モデル一覧の取得が時間切れになりました。時間をおいて再試行してください。"}
+    except (httpx.HTTPError, ValueError, TypeError, AttributeError):
+        return 502, {"ok": False, "message": "モデル一覧の接続・応答を確認できませんでした。モデルIDを手入力することもできます。"}
