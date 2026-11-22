@@ -124,7 +124,13 @@
 <aside><h3>印刷と組立ガイド</h3><p>A4用紙に倍率100%で印刷し、下部の50mm基準線を定規で測ってください。「用紙サイズに合わせる」はオフにします。</p>
 <p>実線は切断、破線は折り目。窓や扉は印刷による表現です。大きなパーツは5mm重ねて貼り合わせます。</p>
 <p>この上の展開図は入力寸法から生成する基本形状です。OBJ/STLの三角面展開には「3Dモデル」タブを使ってください。紙厚補正や写真からの3D復元は未対応です。</p></aside></section></div></section>
-<section id="panel-mesh" class="tabPanel" role="tabpanel" aria-labelledby="tab-mesh" tabindex="0" hidden><section class="meshImport panel" aria-label="OBJ/STLモデルの展開">
+<section id="panel-mesh" class="tabPanel" role="tabpanel" aria-labelledby="tab-mesh" tabindex="0" hidden><section class="meshImport panel" aria-label="公開3Dモデルの検索・取得"><p class="eyebrow">PUBLIC 3D OBJECTS · POLY HAVEN</p><h2>公開3Dオブジェクトを探す</h2>
+<p class="muted">Poly HavenのCC0モデルを検索・取得します。APIキーやAI設定は不要です。椅子・机などの代表的な日本語、または英語で検索できます。テクスチャを取得せず、形状を紙模型向けに最大400面へ調整します。</p>
+<label for="publicModelQuery">モデルの検索語</label><div class="inline"><input id="publicModelQuery" maxlength="120" placeholder="例：椅子、机、chair、wooden table"><button id="publicModelSearch" type="button">公開3Dを検索</button></div>
+<label for="publicModelHeight">取り込むモデルの高さ（mm）</label><input id="publicModelHeight" type="number" min="20" max="300" value="120">
+<label class="aiConsent"><input id="publicModelConsent" type="checkbox"><span>出典・CC0の利用条件を確認し、選択する3Dモデルを取得してサーバーに保存する</span></label>
+<p id="publicModelMessage" role="status">モデル名を入力して検索してください。検索だけではモデル本体を取得しません。</p><div id="publicModelResults"></div><button id="publicModelMore" class="secondary" type="button" hidden>次の12件</button>
+</section><section class="meshImport panel" aria-label="OBJ/STLモデルの展開">
 <div class="meshSectionTitle">
   <div><p class="eyebrow">3D MESH UNFOLDING</p><h2>3Dモデルの展開図</h2></div>
   <span class="status">OBJ / STL</span>
@@ -170,7 +176,7 @@
 <button type="button" class="secondary imageSetup" data-open-tab="settings">画像対応AIを設定</button>
 <p id="imageMessage" role="status" aria-live="polite">画像を検索し、1枚選んでください。</p>
 </section><section class="workspace">
-<h2>3Dプレビュー</h2><button type="button" class="secondary" data-open-tab="projects">保存済み3Dモデルを開く</button><div class="image3dViewer"><canvas id="imageCanvas" tabindex="0" role="img" aria-label="画像から推定した簡易3Dモデル。矢印キーまたはドラッグで回転、プラス・マイナスで拡大縮小"></canvas><p id="imagePlaceholder">生成したモデルをここで回して確認できます。</p></div>
+<h2>3Dプレビュー</h2><button type="button" class="secondary" data-open-tab="projects">保存済み3Dモデルを開く</button><div class="image3dViewer"><canvas id="imageCanvas" tabindex="0" role="img" aria-label="3Dモデル。矢印キーまたはドラッグで回転、プラス・マイナスで拡大縮小"></canvas><p id="imagePlaceholder">生成したモデルをここで回して確認できます。</p></div>
 <div class="bar"><button id="imageResetView" type="button" class="secondary">視点をリセット</button><label for="imageZoom">拡大・縮小</label><input id="imageZoom" type="range" min="0.5" max="2.5" value="1" step="0.1"></div>
 <div id="imageModelInfo" class="result" hidden></div>
 <label class="meshCheck"><input id="imageSaveOriginal" type="checkbox">展開時に生成OBJを一時作業へ追加する（メモリのみ）</label>
@@ -193,7 +199,7 @@
 </div>
 <p class="muted">資料が必要な場合は手元に保管してください。サーバーには生成した3Dモデルと完成した展開図を残します。</p>
 </section>
-<section><h2>保存済みの生成3Dモデル</h2><p class="muted">簡易3D・外部APIで生成したモデルを自動保存します。外部APIの生成GLBも保持します。プレビューと展開は調整済みOBJを使います。参考画像・アップロードした原本は保存しません。</p><button id="refreshModels" type="button" class="secondary">3Dモデル一覧を更新</button><div id="generatedModelList" role="status"></div></section>
+<section><h2>保存済みの3Dモデル</h2><p class="muted">簡易3D・外部APIで生成したモデルを自動保存します。外部APIの生成GLBも保持します。プレビューと展開は調整済みOBJを使います。参考画像・アップロードした原本は保存しません。</p><button id="refreshModels" type="button" class="secondary">3Dモデル一覧を更新</button><div id="generatedModelList" role="status"></div></section>
 <section><h2>保存済みの展開図</h2><button id="refreshOutputs" type="button" class="secondary">一覧を更新</button><div id="outputList" role="status"></div></section><p class="muted">選択したプロジェクトはすべてのタブで共通です。資料の追加・編集は「資料・AI提案」タブで行います。</p><button type="button" data-open-tab="design">資料・AI提案へ戻る</button></section>
 <section id="panel-settings" class="tabPanel" role="tabpanel" aria-labelledby="tab-settings" tabindex="0" hidden><section class="aiSettings">
 <div class="settingsHeading"><h2>生成AIの設定</h2><span id="aiState" class="status">ロック中 · 定型案を使用</span></div>
@@ -255,7 +261,8 @@
 <script defer src="/static/ai-settings.js?v=separate-3d-2"></script>
 <script defer src="/static/app.js"></script>
 <script defer src="/static/projects.js"></script>
-<script defer src="/static/outputs.js?v=saved-models-1"></script>
+<script defer src="/static/outputs.js?v=public-models-1"></script>
 <script defer src="/static/mesh.js"></script>
 <script defer src="/static/image-model.js?v=saved-models-1"></script>
+<script defer src="/static/public-models.js?v=public-models-1"></script>
 </body></html>

@@ -37,10 +37,11 @@ def _public(meta):
     return {key:meta[key] for key in ('id','name','provider','created_at','size_mm','faces')} | {
         'preview_url':base,'obj_url':base+'/model.obj',
         'glb_url':base+'/original.glb' if meta.get('has_glb') else None,
+        **({'attribution':meta['attribution']} if 'attribution' in meta else {}),
     }
 
 
-def save_model(result,*,name,provider,glb=None):
+def save_model(result,*,name,provider,glb=None,attribution=None):
     """Only validated generated OBJ, optional provider GLB and geometry metadata."""
     obj=result['obj'].encode()
     mesh=load_mesh(obj,'generated.obj')
@@ -52,6 +53,9 @@ def save_model(result,*,name,provider,glb=None):
     meta={'id':model_id,'name':str(name)[:80],'provider':provider,
           'created_at':datetime.now(timezone.utc).isoformat(),
           'size_mm':result['size_mm'],'faces':len(mesh.faces),'colors':colors,'has_glb':glb is not None}
+    if attribution is not None:
+        if not re.fullmatch(r'https://polyhaven\.com/a/[A-Za-z0-9_-]{1,100}',attribution.get('source_url','')):raise ValueError('Invalid attribution')
+        meta['attribution']={key:str(attribution.get(key,''))[:250] for key in ('source_url','author','license','license_url')}
     folder=root()/'models';folder.mkdir(parents=True,exist_ok=True)
     staging=folder/('.partial-'+model_id)
     with _lock:
@@ -90,7 +94,7 @@ def show(model_id:str):
             raise HTTPException(404,'保存された生成モデルを読み込めません。') from None
     return {'name':meta['name'],'provider':meta['provider'],'obj':obj,'vertices':mesh.vertices,
             'faces':mesh.faces,'size_mm':meta['size_mm'],'colors':meta.get('colors',[]),
-            'components':[],'notes':[],'warnings':['保存済みのAI生成モデルです。寸法・裏面・組立品質は未検証です。'],
+            'components':[],'notes':[],'warnings':['Poly Havenの公開3Dモデルです（AI生成ではありません）。' if meta['provider']=='Poly Haven' else '保存済みの3Dモデルです。寸法・組立品質は未検証です。'],
             'estimated':True,'saved_model':_public(meta)}
 
 
