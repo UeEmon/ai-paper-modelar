@@ -16,6 +16,7 @@ class ProposalRequest(BaseModel):
     scale: int = Field(default=150, ge=1, le=500)
     subject_type: Literal["architecture", "vehicle", "landscape", "prop", "character", "original", "railway", "other"] = "architecture"
     style: Literal["faithful", "standard", "anime", "retro", "easy"] = "standard"
+    template: Literal["building","box","cylinder","cone","prism","pyramid"] = "building"
     sources: list[dict] = Field(default_factory=list, max_length=8)
     upload_ids: list[str] = Field(default_factory=list, max_length=8)
     include_uploads: bool = False  # Explicit user opt-in for external API processing.
@@ -92,9 +93,9 @@ async def proposals(req: ProposalRequest):
         "architecture, vehicles, scenery, props, characters or original concepts. "
         "Railway dioramas are only one possible application, not a requirement. "
         "Consider printable geometry, joints, level of detail and scale. "
-        "The available deterministic cutting template engine only supports "
-        "simple building and cuboid nets; do not claim that arbitrary shapes "
-        "can already be unfolded or made from AI images. "
+        "The deterministic cutting template engine supports only simple buildings, "
+        "cuboids, cylinders, conical frustums, regular polygon prisms and pyramids. "
+        "Do not claim arbitrary 3D meshes or AI images can already be unfolded. "
         "You may analyze attached reference images if present; a PDF reference is "
         "represented by only a rendered FIRST PAGE plus extracted text where available. "
         "Distinguish visible observations, source metadata, and guesses. "
@@ -108,6 +109,7 @@ async def proposals(req: ProposalRequest):
         "subject_type": req.subject_type,
         "scale": req.scale,
         "preferred_style": req.style,
+        "parametric_template": req.template,
         "online_source_metadata": req.sources[:8],
         "user_uploaded_reference_metadata": context,
         "uploaded_image_count": min(len(assets), 3),

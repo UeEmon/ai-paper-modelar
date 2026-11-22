@@ -93,9 +93,20 @@
 <div><label for="unit">寸法入力の単位</label>
 <select id="unit"><option value="m">メートル (m)</option><option value="cm">センチメートル (cm)</option><option value="mm">ミリメートル (mm)</option></select></div>
 <div><label for="template">展開図の基本形状</label>
-<select id="template"><option value="building">建物（屋根・壁・窓）</option><option value="box">汎用箱型（6面）</option></select></div>
+<select id="template">
+<option value="building">建物（屋根・壁・窓）</option>
+<option value="box">箱型（各面ごとのパーツ）</option>
+<option value="cylinder">円柱（円筒・缶・柱）</option>
+<option value="cone">円すい・円すい台</option>
+<option value="prism">正多角柱（3〜12角形）</option>
+<option value="pyramid">正多角すい（3〜12角形）</option>
+</select></div>
 </div>
-<p class="muted" id="templateGuide">現在の展開図エンジンは建物型・汎用箱型のみです。車両・キャラクターなどの実物形状の自動展開は未対応です。</p>
+<div id="shapeOptions" class="twocol" hidden>
+<div><label for="sides">多角形の辺の数</label><input id="sides" type="number" min="3" max="12" step="1" value="6"></div>
+<div><label for="topRatio">円すい台の上面直径比（0〜1）</label><input id="topRatio" type="number" min="0" max="1" step="0.05" value="0.5"></div>
+</div>
+<p class="muted" id="templateGuide">建物・箱・円柱・円すい・正多角柱・正多角すいのパラメトリック展開図に対応しています。</p>
 <div class="twocol">
 <div><label for="width">元の幅 (m)</label><input id="width" type="number" value="18" min="0.1" max="100" step=".1"></div>
 <div><label for="depth">元の奥行 (m)</label><input id="depth" type="number" value="8" min="0.1" max="100" step=".1"></div>
@@ -115,7 +126,7 @@
 <div><button id="saveSvg" class="secondary" disabled>SVG保存</button><button id="savePdf" disabled>PDF保存</button></div></div>
 <aside><h3>印刷と組立ガイド</h3><p>A4用紙に倍率100%で印刷し、下部の50mm基準線を定規で測ってください。「用紙サイズに合わせる」はオフにします。</p>
 <p>実線は切断、破線は折り目。窓や扉は印刷による表現です。大きなパーツは5mm重ねて貼り合わせます。</p>
-<p>展開図は建物型または汎用箱型の基本テンプレートです。写真や設計図から乗り物・人物など任意の複雑な立体形状を自動復元・展開する機能は未実装です。</p></aside>
+<p>展開図は入力寸法から生成する基本形状です。紙厚補正や任意の3Dモデル・写真からの自動展開は未対応です。円柱は直径、正多角形は外接円直径を幅として入力します。</p></aside>
 </section>
 </main>
 <footer>AI Paper Modelar · 汎用ペーパークラフト試作版 · 参考資料の使用条件をご確認ください。</footer>

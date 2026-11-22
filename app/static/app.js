@@ -116,18 +116,37 @@ function changeInputUnit(){
   sizes();
 }
 function updateDimensionLabels(){
-  for(const [id,caption] of [["width","元の幅"],["depth","元の奥行"],["height","元の高さ／軒高"],["overhang","軒の出"]]){
+  const rounded=["cylinder","cone","prism","pyramid"].includes(el("template").value);
+  for(const [id,caption] of [
+    ["width",rounded?"底面の外径・外接円直径":"元の幅"],
+    ["depth",rounded?"奥行（底面直径と同じ）":"元の奥行"],
+    ["height",el("template").value==="building"?"元の軒高":"元の高さ"],
+    ["overhang","軒の出"]
+  ]){
     document.querySelector('label[for="'+id+'"]').textContent=caption+" ("+el("unit").value+")";
   }
 }
 function updateTemplateHint(){
-  const isBuilding=el("template").value==="building";
-  el("roof").disabled=!isBuilding;
-  el("pitch").disabled=!isBuilding;
-  el("overhang").disabled=!isBuilding;
-  el("templateGuide").textContent=isBuilding
-    ?"建物型では壁・窓・屋根の簡易展開図を作成します。実物の形状を再現するものではありません。"
-    :"箱型では壁4面・天面・底面の汎用パーツを生成します。車両やキャラクターの形状の自動復元は未対応です。";
+  const template=el("template").value;
+  const building=template==="building";
+  const roundOrRegular=["cylinder","cone","prism","pyramid"].includes(template);
+  el("roof").disabled=!building;
+  el("pitch").disabled=!building;
+  el("overhang").disabled=!building;
+  el("depth").disabled=roundOrRegular;
+  el("shapeOptions").hidden=!["cone","prism","pyramid"].includes(template);
+  el("sides").disabled=!["prism","pyramid"].includes(template);
+  el("topRatio").disabled=template!=="cone";
+  const hints={
+    building:"壁4面と屋根の簡易建物。窓や扉は印刷表現です。",
+    box:"壁4面・天面・底面を個別に出力する箱型です。",
+    cylinder:"幅を底面の直径として入力。帯状の側面と円形の上下の蓋を出力します。",
+    cone:"幅は底面直径。上面直径比0で円すい、0〜1で円すい台、1で円柱です。",
+    prism:"幅は底面正多角形の外接円直径。連続側面と多角形の上下の蓋を出力します。",
+    pyramid:"幅は底面正多角形の外接円直径。三角形の側面と底面を出力します。"
+  };
+  el("templateGuide").textContent=hints[template]+" AI案から任意の3D形状を自動展開する機能は未対応です。";
+  updateDimensionLabels();
 }
 function scale(){return Number(el("scale").value==="custom"?el("custom").value:el("scale").value);}
 function getSpec(){
@@ -136,6 +155,7 @@ function getSpec(){
     name: el("place").value.trim() || "Paper model", scale:scale(),
     subject_type:el("subjectType").value,template:el("template").value,
     input_unit:el("unit").value,
+    sides:Number(el("sides").value),top_ratio:Number(el("topRatio").value),
     width_m:Number(el("width").value)*factor,
     depth_m:Number(el("depth").value)*factor,
     height_m:Number(el("height").value)*factor,
@@ -159,8 +179,9 @@ function sizes(){
   if(s.scale<1||s.scale>500){el("scaleResult").textContent="縮尺分母は1～500にしてください。";return;}
   const mm = m=>(m*1000/s.scale).toFixed(1);
   const rise=s.template==="building"&&s.roof==="gable"?s.depth_m*500/s.scale*Math.tan(s.pitch_deg*Math.PI/180):0;
+  const effectiveDepth=["cylinder","cone","prism","pyramid"].includes(s.template)?s.width_m:s.depth_m;
   el("scaleResult").textContent=
-    "模型サイズ　幅 "+mm(s.width_m)+" × 奥行 "+mm(s.depth_m)+" × 全高 "+
+    "模型サイズ　幅 "+mm(s.width_m)+" × 奥行 "+mm(effectiveDepth)+" × 全高 "+
     (Number(mm(s.height_m))+rise).toFixed(1)+" mm（軒の出は別）\n"+
     "人物170cm： "+mm(1.7)+" mm　／　扉2m： "+mm(2)+" mm";
 }
@@ -195,6 +216,7 @@ async function plan(){
     const r=await post("/api/proposals",{
       place:el("place").value.trim(),scale:scale(),style:getSpec().style,
       subject_type:el("subjectType").value,
+      template:el("template").value,
       sources:sources.map(s=>({title:s.title,url:s.url,summary:s.summary})),
       upload_ids:uploaded.map(u=>u.id),
       project_id:window.paperLibrary?.projectId||null,
@@ -265,6 +287,7 @@ el("next").addEventListener("click",async()=>{currentPage++;try{await showPage()
 el("scale").addEventListener("change",()=>{hint();sizes();});
 el("unit").addEventListener("change",changeInputUnit);
 el("template").addEventListener("change",()=>{updateTemplateHint();sizes();});
+for(const id of ["sides","topRatio"]){el(id).addEventListener("input",sizes);}
 el("subjectType").addEventListener("change",()=>{
   const subject=el("subjectType").value;
   if(!["architecture","railway"].includes(subject) && el("template").value==="building"){
