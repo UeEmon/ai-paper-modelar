@@ -1,4 +1,5 @@
 const {test,expect}=require('@playwright/test');
+test.beforeEach(async({page})=>{await page.route('**/api/ai/test',r=>r.fulfill({json:{ok:true,message:'接続テストに成功しました。'}}));});
 async function open(page){await page.goto('/');await page.getByRole('tab',{name:'AI設定',exact:true}).click();}
 async function propose(page){
   await page.getByRole('tab',{name:'資料・AI提案',exact:true}).click();

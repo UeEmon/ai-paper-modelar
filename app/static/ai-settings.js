@@ -28,11 +28,11 @@
     get("aiProfile").value=selected;
   }
   let busy=false;
-  async function action(work){
+  async function action(work,{refresh=true}={}){
     if(busy)return;busy=true;
-    for(const id of ["aiCreate","aiUnlock","aiSave","aiDelete"])get(id).disabled=true;
+    for(const id of ["aiCreate","aiUnlock","aiSave","aiTest","aiDelete"])get(id).disabled=true;
     try{await work();}catch(error){message(error.message);}
-    finally{busy=false;for(const id of ["aiCreate","aiUnlock","aiSave","aiDelete"])get(id).disabled=false;render();}
+    finally{busy=false;for(const id of ["aiCreate","aiUnlock","aiSave","aiTest","aiDelete"])get(id).disabled=false;if(refresh)render();}
   }
   try{
     if(!window.isSecureContext||!window.crypto?.subtle)throw Error();
@@ -52,9 +52,33 @@
   get("aiUnlock").addEventListener("click",()=>action(async()=>{
     await vault.unlock(get("aiProfile").value,get("aiPassword").value);message("解除しました。");
   }));
+  function draft(){
+    const provider=get("aiProvider").value,model=get("aiModel").value.trim(),apiKey=get("aiKey").value.trim();
+    const options={endpoint:get("aiEndpoint").value.trim(),vision:get("aiVision").checked};
+    return {provider,model,apiKey,options,data:vault.prepare(provider,model,apiKey,options),epoch:vault.epoch};
+  }
+  async function testDraft(candidate){
+    if(candidate.provider==="none")return;
+    message("接続を確認しています…ローカルモデルの初回読み込みには時間がかかる場合があります。");
+    let response;
+    try{
+      response=await fetch("/api/ai/test",{method:"POST",headers:vault.headers(candidate.data),cache:"no-store",redirect:"error"});
+    }catch{throw Error("接続テストを実行できませんでした。アプリサーバーとの通信を確認してください。");}
+    if(candidate.epoch!==vault.epoch)throw Error("プロファイルが切り替わったため、接続テストの結果を破棄しました。");
+    const result=await response.json().catch(()=>({}));
+    if(candidate.epoch!==vault.epoch)throw Error("プロファイルが切り替わったため、接続テストの結果を破棄しました。");
+    if(!response.ok||result.ok!==true)throw Error(result.message||"接続テストに失敗しました。");
+  }
+  get("aiTest").addEventListener("click",()=>action(async()=>{
+    const candidate=draft();await testDraft(candidate);
+    message(candidate.provider==="none"?"AIを使わないため、接続テストは不要です。":"接続テストに成功しました。保存するまで設定は変更されません。");
+  },{refresh:false}));
   get("aiSave").addEventListener("click",()=>action(async()=>{
-    await vault.save(get("aiProvider").value,get("aiModel").value.trim(),get("aiKey").value.trim(),{endpoint:get("aiEndpoint").value.trim(),vision:get("aiVision").checked});message("暗号化して保存しました。");
-  }));
+    const candidate=draft();await testDraft(candidate);
+    if(candidate.epoch!==vault.epoch)throw Error("操作が切り替わりました。");
+    await vault.save(candidate.provider,candidate.model,candidate.apiKey,candidate.options);
+    render();message("接続を確認し、暗号化して保存しました。");
+  },{refresh:false}));
   get("aiLock").addEventListener("click",()=>{vault.lock();render();message("ロックしました。");});
   get("aiDelete").addEventListener("click",()=>action(async()=>{
     const id=get("aiProfile").value;

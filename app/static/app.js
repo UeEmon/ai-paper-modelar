@@ -190,54 +190,122 @@ async function post(url,value){
   if(!r.ok){const d=await r.json().catch(()=>({}));throw Error(typeof d.detail==="string"?d.detail:"入力値または通信を確認してください");}
   return r;
 }
+let sourceQuery="", sourceProject=null, researchRequest=0, researchAbort=null, proposalRequest=0;
+function clearProposals(){proposalRequest++;el("proposals").replaceChildren();el("plan").disabled=false;}
+function selectedSources(){
+  if(sourceQuery!==el("place").value.trim()||sourceProject!==(window.paperLibrary?.projectId||null))return [];
+  return sources.filter(source=>source.selected);
+}
+function researchState(message){
+  const selected=selectedSources();
+  el("researchState").textContent=message||(
+    sources.length?selected.length+"件をAIに使用します。必要な資料だけチェックしてください。":"資料未選択。検索後、AIで使う資料を選んでください。");
+  el("plan").textContent=selected.length?"選択資料からAI設計案を作成":"AIで案を提案";
+}
+function clearResearch(message){
+  researchRequest++;researchAbort?.abort();researchAbort=null;
+  sources=[];sourceQuery="";sourceProject=null;
+  el("research").replaceChildren();clearProposals();
+  el("search").disabled=false;researchState(message);
+}
+window.paperResearch={sync(){
+  if(sourceQuery&&(sourceQuery!==el("place").value.trim()||sourceProject!==(window.paperLibrary?.projectId||null)))clearResearch("題材・プロジェクトが変わりました。資料を再検索してください。");
+}};
+function invalidatePreview(){
+  spec=null;pages=0;currentPage=0;
+  if(previewURL)URL.revokeObjectURL(previewURL);previewURL=null;
+  el("drawing").removeAttribute("src");el("drawing").hidden=true;el("placeholder").hidden=false;
+  el("page").textContent="— / —";
+  for(const id of ["prev","next","savePdf","saveSvg"])el(id).disabled=true;
+}
 async function search(){
-  const area=el("research");area.replaceChildren();
+  clearResearch();const request=researchRequest;
+  const q=el("place").value.trim(),project=window.paperLibrary?.projectId||null;
+  const controller=new AbortController();researchAbort=controller;
   el("search").disabled=true;status("公開資料を検索中");
   try{
-    const q=el("place").value.trim();
     if(q.length<2)throw Error("検索語を2文字以上で入力してください。");
-    const r=await fetch("/api/research?q="+encodeURIComponent(q));
+    const r=await fetch("/api/research?q="+encodeURIComponent(q),{signal:controller.signal});
     if(!r.ok)throw Error("Wikipediaへの接続に失敗しました。");
-    const data=await r.json();sources=data.results;
+    const data=await r.json();
+    if(request!==researchRequest||q!==el("place").value.trim()||project!==(window.paperLibrary?.projectId||null))return;
+    sourceQuery=q;sourceProject=project;
+    sources=data.results.filter(source=>{
+      try{const url=new URL(source.url);return url.protocol==="https:"&&url.hostname==="ja.wikipedia.org";}catch{return false;}
+    }).map((source,index)=>({...source,selected:index===0}));
     for(const src of sources){
-      const card=text(area,"div","","reference");
+      const card=text(el("research"),"div","","reference");
+      const label=text(card,"label","","referenceChoice");
+      const checkbox=document.createElement("input");checkbox.type="checkbox";checkbox.checked=src.selected;
+      checkbox.setAttribute("aria-label",src.title+" をAIの参考資料に使う");label.appendChild(checkbox);
+      text(label,"span","AIに使う");
+      checkbox.addEventListener("change",()=>{src.selected=checkbox.checked;clearProposals();researchState();});
       const link=text(card,"a",src.title);link.href=src.url;link.target="_blank";link.rel="noopener noreferrer";
       text(card,"p",src.summary||"概要なし");
       text(card,"small","二次資料・寸法未検証","muted");
     }
-    text(area,"p",data.note,"muted");status(sources.length+"件の資料を取得");
-  }catch(e){text(area,"p",e.message,"warning");status("資料検索に失敗");}
-  finally{el("search").disabled=false;}
+    text(el("research"),"p",sources.length?data.note:"該当する資料がありません。名前を変えて検索するか、資料なしでAI提案を作成できます。","muted");
+    researchState();status(sources.length+"件を取得・"+selectedSources().length+"件を選択");
+  }catch(e){
+    if(request!==researchRequest||e.name==="AbortError")return;
+    text(el("research"),"p",e.message,"warning");researchState("検索できませんでした。以前の検索結果は使用しません。");status("資料検索に失敗");
+  }finally{if(request===researchRequest){el("search").disabled=false;researchAbort=null;}}
+}
+function applyProposal(proposal, references){
+  const d=proposal.design;
+  const radio=document.querySelector('input[name="style"][value="'+proposal.style+'"]');
+  if(radio)radio.checked=true;
+  if(!d){status("スタイルのみ更新しました。形状・寸法は変更していません。");return;}
+  el("template").value=d.template;
+  el("unit").value="m";currentInputUnit="m";
+  for(const [id,key] of [["width","width_m"],["depth","depth_m"],["height","height_m"],
+      ["pitch","pitch_deg"],["overhang","overhang_m"],["sides","sides"],["topRatio","top_ratio"]])el(id).value=d[key];
+  el("roof").value=d.roof;
+  updateTemplateHint();hint();sizes();invalidatePreview();
+  const notice=el("appliedDesign");notice.replaceChildren();notice.hidden=false;
+  text(notice,"strong","AI設計案を反映："+proposal.title);
+  text(notice,"p","寸法はAIの推定値です。資料の実測値ではありません。確認・修正してから展開図を生成してください。");
+  if(proposal.design_basis)text(notice,"p",proposal.design_basis);
+  for(const ref of references){const link=text(notice,"a","参考："+ref.title);link.href=ref.url;link.target="_blank";link.rel="noopener noreferrer";}
+  window.paperTabs?.show("shape",{focus:true});status("設計案を反映しました。寸法を確認して生成してください。");
 }
 async function plan(){
   const area=el("proposals");area.replaceChildren();
+  const request=++proposalRequest;
+  const place=el("place").value.trim(),project=window.paperLibrary?.projectId||null;
+  const references=selectedSources().map(s=>({title:s.title,url:s.url,summary:s.summary}));
   el("plan").disabled=true;status("デザイン案を作成中");
   try{
     const r=await post("/api/proposals",{
-      place:el("place").value.trim(),scale:scale(),style:getSpec().style,
-      subject_type:el("subjectType").value,
-      template:el("template").value,
-      sources:sources.map(s=>({title:s.title,url:s.url,summary:s.summary})),
-      upload_ids:uploaded.map(u=>u.id),
-      project_id:window.paperLibrary?.projectId||null,
-      project_asset_ids:window.paperLibrary?.selectedAssets()||[],
+      place,scale:scale(),style:getSpec().style,
+      subject_type:el("subjectType").value,template:el("template").value,
+      sources:references,upload_ids:uploaded.map(u=>u.id),
+      project_id:project,project_asset_ids:window.paperLibrary?.selectedAssets()||[],
       include_uploads:el("allowAiUploads").checked
     });
     const result=await r.json();
+    if(request!==proposalRequest)return;
+    if(place!==el("place").value.trim()||project!==(window.paperLibrary?.projectId||null)){
+      status("題材が変わったため、古いAI提案を破棄しました。");return;
+    }
+    text(area,"p",result.provider==="offline"?"定型案です。検索資料からの形状・寸法の設計は行っていません。AI設定でプロファイルを解除してください。":"使用AI："+result.provider+" ／ 選択資料 "+references.length+"件を送信 ／ 画像入力 "+(result.analyzed_uploads||0)+"件","muted");
+    if(result.provider==="offline"){
+      const setup=text(area,"button","AI設定を開く","secondary");setup.addEventListener("click",()=>window.paperTabs?.show("settings",{focus:true}));
+    }
     for(const p of result.proposals){
-      const card=text(area,"div","","proposal");
-      text(card,"strong",p.title);
-      text(card,"p",p.description);
-      const option=document.querySelector('input[name="style"][value="'+p.style+'"]');
-      if(option){
-        const b=text(card,"button","適用","secondary");
-        b.addEventListener("click",()=>{option.checked=true;status("スタイルを更新しました");});
-      }
+      const card=text(area,"div","","proposal");text(card,"strong",p.title);text(card,"p",p.description);
+      const cited=(p.source_indices||[]).filter(i=>Number.isInteger(i)&&i>0&&i<=references.length).map(i=>references[i-1]);
+      if(p.design_basis)text(card,"p","AIによる資料の解釈："+p.design_basis);
+      for(const src of cited){const link=text(card,"a","参考："+src.title);link.href=src.url;link.target="_blank";link.rel="noopener noreferrer";}
+      if(p.design)text(card,"p","形状："+p.design.template+" ／ 推定寸法（m）："+p.design.width_m+" × "+p.design.depth_m+" × "+p.design.height_m,"draftDimensions");
+      else text(card,"p","この案には形状・寸法が含まれていません。適用してもスタイルのみ変更されます。","muted");
+      const b=text(card,"button",p.design?"設計案を基本形状へ反映":"スタイルのみ適用","secondary");
+      b.addEventListener("click",()=>applyProposal(p,cited));
     }
     for(const note of result.notes)text(area,"p",note,"muted");
-    status(result.provider==="offline"?"定型案を表示":"AI提案を表示");
-  }catch(e){text(area,"p",e.message,"warning");status("提案に失敗");}
-  finally{el("plan").disabled=false;}
+    status(result.provider==="offline"?"定型案を表示（設計寸法の生成なし）":"AI設計案を表示");
+  }catch(e){if(request===proposalRequest){text(area,"p",e.message,"warning");status("提案に失敗");}}
+  finally{if(request===proposalRequest)el("plan").disabled=false;}
 }
 async function showPage(){
   const r=await post("/api/template.svg?page="+currentPage,spec);
@@ -277,6 +345,10 @@ async function pdf(){
   finally{el("savePdf").disabled=false;}
 }
 el("search").addEventListener("click",search);
+el("place").addEventListener("input",()=>{
+  clearResearch("題材を変更しました。資料を再検索してください。");
+  el("appliedDesign").hidden=true;invalidatePreview();
+});
 el("uploadButton").addEventListener("click",addUploads);
 el("plan").addEventListener("click",plan);
 el("generate").addEventListener("click",generate);

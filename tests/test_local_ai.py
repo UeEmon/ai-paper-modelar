@@ -47,9 +47,9 @@ def test_local_adapters(monkeypatch, provider, key):
     assert body["stream"] is False
     if provider == "ollama":
         assert body["format"] == "json"
-        assert body["options"]["num_predict"] == 1600
+        assert body["options"]["num_predict"] == 2400
     else:
-        assert body["max_tokens"] == 1600
+        assert body["max_tokens"] == 2400
     assert options[0]["trust_env"] is False
     assert options[0]["follow_redirects"] is False
     assert options[0]["timeout"] == 120

@@ -30,6 +30,7 @@
 <label for="place">対象の名称・アイデア</label>
 <div class="inline"><input id="place" value="小さな洋館" placeholder="例：灯台、バス、城、動物、創作の建物" maxlength="120"><button id="search" class="secondary">資料検索</button></div>
 <p class="muted">名称からWikipediaの公開情報を探します。独自のデザインは資料なしで制作可能です。出典・写真や設計図の権利は別途確認してください。</p>
+<p id="researchState" class="muted" role="status">資料未選択。検索後、AIで使う資料を選んでください。</p>
 <div id="research" aria-live="polite"></div>
 <div class="sectionhead"><span class="eyebrow">参考資料</span></div>
 <p class="lead">撮影写真・スケッチ・設計図・参考画像・PDF（JPEG / PNG / WebP / PDF）を追加できます。</p>
@@ -63,7 +64,7 @@
 </div>
 <div id="proposals" aria-live="polite"></div>
 <div class="nextStep"><p>デザインが決まったら、基本形状と寸法を指定します。</p><button type="button" data-open-tab="shape">基本形状の展開図へ進む →</button></div></section>
-<aside class="workflowGuide"><h3>作り方を選ぶ</h3><p>資料やAIでアイデアを考えたいときは、このタブを使います。AIはスタイルを提案します。</p><button type="button" class="secondary" data-open-tab="settings">使うAIを設定</button><h3>寸法がわかっている</h3><p>箱・建物・円柱などの形から、寸法を指定して直接作れます。</p><button type="button" class="secondary" data-open-tab="shape">基本形状から作る</button><h3>3Dモデルを持っている</h3><p>OBJ・STLファイルから展開図を作れます。</p><button type="button" class="secondary" data-open-tab="mesh">3Dモデルを開く</button><h3>作業を保存したい</h3><p>プロジェクトを作成・選択してから資料を追加すると、原本と設計条件を保存できます。</p><button type="button" class="secondary" data-open-tab="projects">プロジェクトを管理</button></aside></div></section>
+<aside class="workflowGuide"><h3>作り方を選ぶ</h3><p>資料やAIでアイデアを考えたいときは、このタブを使います。AIは資料を参考に、スタイル・基本形状・推定寸法を提案します。</p><button type="button" class="secondary" data-open-tab="settings">使うAIを設定</button><h3>寸法がわかっている</h3><p>箱・建物・円柱などの形から、寸法を指定して直接作れます。</p><button type="button" class="secondary" data-open-tab="shape">基本形状から作る</button><h3>3Dモデルを持っている</h3><p>OBJ・STLファイルから展開図を作れます。</p><button type="button" class="secondary" data-open-tab="mesh">3Dモデルを開く</button><h3>作業を保存したい</h3><p>プロジェクトを作成・選択してから資料を追加すると、原本と設計条件を保存できます。</p><button type="button" class="secondary" data-open-tab="projects">プロジェクトを管理</button></aside></div></section>
 <section id="panel-shape" class="tabPanel" role="tabpanel" aria-labelledby="tab-shape" tabindex="0" hidden><div class="shapeLayout"><section class="controls"><p class="eyebrow">BASIC SHAPES</p><h2>寸法から展開図を作る</h2>
 <p class="lead">基本形状・縮尺・寸法を指定して生成します。AI設定や資料の登録は不要です。</p>
 <div class="twocol">
@@ -110,6 +111,7 @@
 <div><label for="roof">屋根形状</label><select id="roof"><option value="gable">切妻</option><option value="flat">陸屋根</option></select></div>
 <div><label for="overhang">軒の出 (m)</label><input id="overhang" type="number" value="0.3" min="0" max="2" step=".1"></div>
 </div>
+<div id="appliedDesign" class="result" hidden></div>
 <div id="scaleResult" class="result" aria-live="polite"></div>
 <p class="muted">初期寸法はサンプルです。AIの提案は設計の参考で、図面の形状や寸法を自動復元する機能ではありません。</p>
 <button id="generate" class="mainbutton">この条件でA4展開図を生成</button>
@@ -188,7 +190,8 @@
 <p class="muted">通常はテキストのみ。画像を送るには、資料欄のAI参照許可も必要です。接続先が許可されていない場合はREADMEの設定を確認してください。</p>
 </div>
 <label id="aiKeyHint" for="aiKey">APIキー（空欄なら選択先の保存済みキーを維持）</label><input id="aiKey" type="password" maxlength="512" autocomplete="off" spellcheck="false">
-<button id="aiSave" type="button">暗号化して保存・使用</button>
+<div class="projectButtons"><button id="aiTest" type="button" class="secondary">接続テスト</button><button id="aiSave" type="button">接続を確認して保存・使用</button></div>
+<p class="muted">保存時に選択モデルへ短いテストを送り、成功後に保存します。資料は送信しません。クラウドAIでは少量のAPI利用料が発生する場合があります。</p>
 <p class="muted">保存後の設定をAI提案に使用します。プロバイダーごとのモデルとキーを保持します。</p>
 </fieldset></fieldset><p id="aiMessage" role="status" aria-live="polite"></p>
 </section></section>

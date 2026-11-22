@@ -111,6 +111,7 @@ const paperLibrary = {
     }
     this.render();
     window.paperTabs?.refreshContext();
+    window.paperResearch?.sync();
   },
   async create(){
     const btn=el("newProject");btn.disabled=true;

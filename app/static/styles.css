@@ -66,3 +66,5 @@ main{display:block;margin-top:26px}
 @media(max-width:480px){.appTabs{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));overflow:visible}.appTabs [role=tab]{padding:11px 4px;font-size:12px}}
 
 .tabPanel:focus-visible{outline:2px solid #558f80;outline-offset:5px;border-radius:12px}
+
+.referenceChoice{display:flex!important;align-items:center;gap:6px;margin-top:0!important}.referenceChoice input{width:18px;height:18px;padding:0}.proposal a,#appliedDesign a{display:block;margin-top:6px;overflow-wrap:anywhere;color:#166e57}.draftDimensions{font-weight:700}#researchState{padding:10px;background:#eef4ef;border-radius:8px}#appliedDesign{white-space:normal}#appliedDesign p{font-weight:400;font-size:12px}
