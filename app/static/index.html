@@ -10,6 +10,7 @@
 <button type="button" role="tab" id="tab-design" aria-controls="panel-design" aria-selected="true" tabindex="0">資料・AI提案</button>
 <button type="button" role="tab" id="tab-shape" aria-controls="panel-shape" aria-selected="false" tabindex="-1">基本形状</button>
 <button type="button" role="tab" id="tab-mesh" aria-controls="panel-mesh" aria-selected="false" tabindex="-1">3Dモデル</button>
+<button type="button" role="tab" id="tab-image3d" aria-controls="panel-image3d" aria-selected="false" tabindex="-1">画像→3D</button>
 <button type="button" role="tab" id="tab-projects" aria-controls="panel-projects" aria-selected="false" tabindex="-1">プロジェクト</button>
 <button type="button" role="tab" id="tab-settings" aria-controls="panel-settings" aria-selected="false" tabindex="-1">AI設定</button>
 </div>
@@ -65,7 +66,7 @@
 </div>
 <div id="proposals" aria-live="polite"></div>
 <div class="nextStep"><p>デザインが決まったら、基本形状と寸法を指定します。</p><button type="button" data-open-tab="shape">基本形状の展開図へ進む →</button></div></section>
-<aside class="workflowGuide"><h3>作り方を選ぶ</h3><p>資料やAIでアイデアを考えたいときは、このタブを使います。AIは資料を参考に、スタイル・基本形状・推定寸法を提案します。</p><button type="button" class="secondary" data-open-tab="settings">使うAIを設定</button><h3>寸法がわかっている</h3><p>箱・建物・円柱などの形から、寸法を指定して直接作れます。</p><button type="button" class="secondary" data-open-tab="shape">基本形状から作る</button><h3>3Dモデルを持っている</h3><p>OBJ・STLファイルから展開図を作れます。</p><button type="button" class="secondary" data-open-tab="mesh">3Dモデルを開く</button><h3>作業を保存したい</h3><p>プロジェクトを作成・選択してから資料を追加すると、原本と設計条件を保存できます。</p><button type="button" class="secondary" data-open-tab="projects">プロジェクトを管理</button></aside></div></section>
+<aside class="workflowGuide"><h3>作り方を選ぶ</h3><p>資料やAIでアイデアを考えたいときは、このタブを使います。AIは資料を参考に、スタイル・基本形状・推定寸法を提案します。</p><button type="button" class="secondary" data-open-tab="settings">使うAIを設定</button><h3>寸法がわかっている</h3><p>箱・建物・円柱などの形から、寸法を指定して直接作れます。</p><button type="button" class="secondary" data-open-tab="shape">基本形状から作る</button><h3>3Dモデルを持っている</h3><p>OBJ・STLファイルから展開図を作れます。</p><button type="button" class="secondary" data-open-tab="mesh">3Dモデルを開く</button><h3>画像から立体を考えたい</h3><p>検索画像の特徴をもとに、AIで基本立体を組み合わせた簡易3Dを作れます。</p><button type="button" class="secondary" data-open-tab="image3d">画像から3Dを作る</button><h3>作業を保存したい</h3><p>プロジェクトを作成・選択してから資料を追加すると、原本と設計条件を保存できます。</p><button type="button" class="secondary" data-open-tab="projects">プロジェクトを管理</button></aside></div></section>
 <section id="panel-shape" class="tabPanel" role="tabpanel" aria-labelledby="tab-shape" tabindex="0" hidden><div class="shapeLayout"><section class="controls"><p class="eyebrow">BASIC SHAPES</p><h2>寸法から展開図を作る</h2>
 <p class="lead">基本形状・縮尺・寸法を指定して生成します。AI設定や資料の登録は不要です。</p>
 <div class="twocol">
@@ -153,6 +154,26 @@
 <p class="muted">展開処理はローカルサーバーで実行します。一時ジョブに原本は保管しません。制作プロジェクトへの保存を選択した場合のみ原本が残り、生成結果は1時間で失効します。非多様体メッシュや過密なメッシュは修復・簡略化してください。自動展開の組立品質は保証されません。</p>
 </section>
 </section>
+<section id="panel-image3d" class="tabPanel" role="tabpanel" aria-labelledby="tab-image3d" tabindex="0" hidden>
+<div class="image3dLayout"><section class="controls">
+<p class="eyebrow">IMAGE TO SIMPLE 3D</p><h2>検索画像から簡易3Dを作る</h2>
+<p class="lead">画像の特徴をAIで読み取り、箱・円柱・円すい・屋根の部品を組み合わせます。見えない裏側や寸法は推定です。</p>
+<label for="imageQuery">画像の検索語（未入力なら題材名）</label><div class="inline"><input id="imageQuery" maxlength="120" placeholder="例：東京タワー、lighthouse"><button id="imageSearch" type="button" class="secondary">画像検索</button></div>
+<p class="muted">Wikimedia CommonsのJPEG・PNG・WebP画像を検索します。見つからない場合は英語の名前でも試してください。</p>
+<div id="imageCandidates" class="imageCandidates" aria-live="polite"></div>
+<label for="imageHeight">完成モデルの高さ（mm）</label><input id="imageHeight" type="number" min="20" max="300" value="120">
+<label class="aiConsent"><input id="imageConsent" type="checkbox"><span>出典と利用条件を確認し、選択画像をAIへ送信して3D化する<small>「AI設定」で解除した画像対応モデルを使用します。クラウドAIはAPI利用料が発生する場合があります。</small></span></label>
+<button id="imageGenerate" type="button" class="mainbutton" disabled>選択画像から簡易3Dを生成</button>
+<button type="button" class="secondary imageSetup" data-open-tab="settings">画像対応AIを設定</button>
+<p id="imageMessage" role="status" aria-live="polite">画像を検索し、1枚選んでください。</p>
+</section><section class="workspace">
+<h2>3Dプレビュー</h2><div class="image3dViewer"><canvas id="imageCanvas" tabindex="0" role="img" aria-label="画像から推定した簡易3Dモデル。矢印キーまたはドラッグで回転、プラス・マイナスで拡大縮小"></canvas><p id="imagePlaceholder">生成したモデルをここで回して確認できます。</p></div>
+<div class="bar"><button id="imageResetView" type="button" class="secondary">視点をリセット</button><label for="imageZoom">拡大・縮小</label><input id="imageZoom" type="range" min="0.5" max="2.5" value="1" step="0.1"></div>
+<div id="imageModelInfo" class="result" hidden></div>
+<label class="meshCheck"><input id="imageSaveOriginal" type="checkbox">展開図の作成時、選択中のプロジェクトに生成OBJも保存する</label>
+<div class="projectButtons"><button id="imageObj" type="button" class="secondary" disabled>OBJを保存</button><button id="imageUnfold" type="button" disabled>この3Dモデルの展開図を作る</button></div>
+<p class="muted">OBJはmm単位の形状です。色はこのプレビュー用で、写真のテクスチャは転写しません。独立した部品の間に隙間・重なりが生じるため、試作して接合を調整してください。</p>
+</section></div></section>
 <section id="panel-projects" class="tabPanel" role="tabpanel" aria-labelledby="tab-projects" tabindex="0" hidden><section class="projectEditor" aria-label="保存済み制作プロジェクト">
 <p class="eyebrow">PROJECT LIBRARY</p><h2>プロジェクトの保存と再開</h2>
 <p class="muted">作品ごとに原本資料と模型設定を保存し、後日再編集できます。</p>
@@ -208,4 +229,5 @@
 <script defer src="/static/app.js"></script>
 <script defer src="/static/projects.js"></script>
 <script defer src="/static/mesh.js"></script>
+<script defer src="/static/image-model.js"></script>
 </body></html>

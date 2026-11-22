@@ -17,6 +17,7 @@ from .research import research
 from .senrolab import router as senrolab_router
 from .mesh_routes import router as mesh_router
 from .project_routes import router as project_router
+from .image_models import router as image_model_router
 from .projects import LibraryProblem
 from .uploads import add_asset, get_asset, delete_asset, UploadProblem, MAX_FILE_BYTES
 
@@ -25,6 +26,7 @@ app = FastAPI(title="AI Paper Modelar", version="0.1.0")
 app.include_router(senrolab_router)
 app.include_router(mesh_router)
 app.include_router(project_router)
+app.include_router(image_model_router)
 
 
 @app.middleware("http")
@@ -38,7 +40,7 @@ async def security_headers(request: Request, call_next):
         )
     response.headers["Referrer-Policy"] = "no-referrer"
     response.headers["X-Content-Type-Options"] = "nosniff"
-    if request.url.path in {"/api/proposals", "/api/ai/test", "/api/ai/models"}:
+    if request.url.path in {"/api/proposals", "/api/ai/test", "/api/ai/models"} or request.url.path.startswith("/api/image-model/"):
         response.headers["Cache-Control"] = "no-store"
     return response
 
@@ -48,7 +50,7 @@ async def security_headers(request: Request, call_next):
 async def validation_error(request: Request, exc: RequestValidationError):
     if request.url.path.startswith("/v1/"):
         return JSONResponse({"error": "入力が正しくありません"}, status_code=400)
-    if request.url.path in {"/api/proposals", "/api/ai/test", "/api/ai/models"}:
+    if request.url.path in {"/api/proposals", "/api/ai/test", "/api/ai/models"} or request.url.path.startswith("/api/image-model/"):
         return JSONResponse({"detail": "入力値を確認してください。"}, status_code=422)
     return await request_validation_exception_handler(request, exc)
 

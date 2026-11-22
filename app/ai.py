@@ -139,6 +139,96 @@ def offline(req: ProposalRequest):
     }
 
 
+async def complete_json(credentials: AICredentials, system: str, prompt: str, images: list[str], json_schema: dict | None = None):
+    """Shared bounded multimodal transport; credentials remain request-scoped."""
+    provider, model, key = credentials.provider, credentials.model, credentials.api_key
+    local = provider in LOCAL_PROVIDERS
+    endpoint = local_endpoint(credentials.endpoint) if local else ""
+    if images and local and not credentials.vision:
+        raise ValueError("画像対応モデルを有効にしてください。")
+    async with asyncio.timeout(120 if local else 40), httpx.AsyncClient(timeout=120 if local else 40,
+                                 trust_env=not local, follow_redirects=False) as client:
+        if local:
+            auth = {"Authorization": "Bearer " + key} if key else {}
+            if provider == "ollama":
+                user = {"role": "user", "content": prompt}
+                if images:
+                    user["images"] = images
+                body = {"model": model, "stream": False, "format": "json",
+                        "options": {"num_predict": 2400},
+                        "messages": [{"role": "system", "content": system}, user]}
+                if json_schema is not None:
+                    body["format"] = json_schema
+                    body["think"] = False
+                r = await client.post(endpoint + "/api/chat", headers=auth, json=body)
+                r.raise_for_status()
+                raw = r.json()["message"]["content"]
+            else:
+                content = [{"type": "text", "text": prompt}]
+                content.extend({"type": "image_url", "image_url": {
+                    "url": "data:image/jpeg;base64," + image}} for image in images)
+                body = {"model": model, "stream": False, "max_tokens": 2400,
+                        "messages": [{"role": "system", "content": system},
+                                     {"role": "user", "content": content if images else prompt}]}
+                r = await client.post(endpoint + "/chat/completions", headers=auth, json=body)
+                r.raise_for_status()
+                raw = r.json()["choices"][0]["message"]["content"]
+        elif provider == "openai":
+            content = [{"type": "input_text", "text": prompt}]
+            content.extend(
+                {"type": "input_image", "image_url": "data:image/jpeg;base64," + b}
+                for b in images
+            )
+            r = await client.post("https://api.openai.com/v1/responses",
+                headers={"Authorization": "Bearer " + key},
+                json={"model": model,
+                      "instructions": system, "store": False,
+                      "input": [{"role": "user", "content": content}]})
+            r.raise_for_status()
+            data = r.json()
+            raw = "".join(c.get("text", "") for out in data.get("output", [])
+                          for c in out.get("content", [])
+                          if c.get("type") == "output_text")
+        elif provider == "gemini":
+            parts = [{"text": system + "\n" + prompt}]
+            parts.extend(
+                {"inline_data": {"mime_type": "image/jpeg", "data": b}}
+                for b in images
+            )
+            r = await client.post(
+                "https://generativelanguage.googleapis.com/v1beta/models/"
+                + model + ":generateContent",
+                headers={"x-goog-api-key": key},
+                json={"contents": [{"parts": parts}],
+                      "generationConfig": {"responseMimeType": "application/json"}})
+            r.raise_for_status()
+            raw = "".join(p.get("text", "") for c in r.json().get("candidates", [])
+                          for p in c.get("content", {}).get("parts", []))
+        else:
+            blocks = [{"type": "text", "text": prompt}]
+            blocks.extend(
+                {"type": "image", "source": {
+                    "type": "base64", "media_type": "image/jpeg", "data": b,
+                }}
+                for b in images
+            )
+            r = await client.post("https://api.anthropic.com/v1/messages",
+                headers={"x-api-key": key, "anthropic-version": "2023-06-01"},
+                json={"model": model,
+                      "max_tokens": 2400, "system": system,
+                      "messages": [{"role": "user", "content": blocks}]})
+            r.raise_for_status()
+            raw = "".join(c.get("text", "") for c in r.json().get("content", [])
+                          if c.get("type") == "text")
+    raw = raw.strip()
+    if raw.startswith(chr(96) * 3) or raw.startswith("~~~"):
+        raw = raw.split("\n", 1)[1].rsplit("\n", 1)[0]
+    result = json.loads(raw)
+    if not isinstance(result, dict):
+        raise ValueError("Expected JSON object")
+    return result
+
+
 async def proposals(req: ProposalRequest, credentials: AICredentials | None = None):
     if credentials is None:
         return offline(req)
@@ -224,81 +314,7 @@ async def proposals(req: ProposalRequest, credentials: AICredentials | None = No
         for a in assets[:3] if not local or credentials.vision
     ]
     try:
-        async with asyncio.timeout(120 if local else 40), httpx.AsyncClient(timeout=120 if local else 40,
-                                     trust_env=not local, follow_redirects=False) as client:
-            if local:
-                auth = {"Authorization": "Bearer " + key} if key else {}
-                if provider == "ollama":
-                    user = {"role": "user", "content": prompt}
-                    if images:
-                        user["images"] = images
-                    body = {"model": model, "stream": False, "format": "json",
-                            "options": {"num_predict": 2400},
-                            "messages": [{"role": "system", "content": system}, user]}
-                    r = await client.post(endpoint + "/api/chat", headers=auth, json=body)
-                    r.raise_for_status()
-                    raw = r.json()["message"]["content"]
-                else:
-                    content = [{"type": "text", "text": prompt}]
-                    content.extend({"type": "image_url", "image_url": {
-                        "url": "data:image/jpeg;base64," + image}} for image in images)
-                    body = {"model": model, "stream": False, "max_tokens": 2400,
-                            "messages": [{"role": "system", "content": system},
-                                         {"role": "user", "content": content if images else prompt}]}
-                    r = await client.post(endpoint + "/chat/completions", headers=auth, json=body)
-                    r.raise_for_status()
-                    raw = r.json()["choices"][0]["message"]["content"]
-            elif provider == "openai":
-                content = [{"type": "input_text", "text": prompt}]
-                content.extend(
-                    {"type": "input_image", "image_url": "data:image/jpeg;base64," + b}
-                    for b in images
-                )
-                r = await client.post("https://api.openai.com/v1/responses",
-                    headers={"Authorization": "Bearer " + key},
-                    json={"model": model,
-                          "instructions": system, "store": False,
-                          "input": [{"role": "user", "content": content}]})
-                r.raise_for_status()
-                data = r.json()
-                raw = "".join(c.get("text", "") for out in data.get("output", [])
-                              for c in out.get("content", [])
-                              if c.get("type") == "output_text")
-            elif provider == "gemini":
-                parts = [{"text": system + "\n" + prompt}]
-                parts.extend(
-                    {"inline_data": {"mime_type": "image/jpeg", "data": b}}
-                    for b in images
-                )
-                r = await client.post(
-                    "https://generativelanguage.googleapis.com/v1beta/models/"
-                    + model + ":generateContent",
-                    headers={"x-goog-api-key": key},
-                    json={"contents": [{"parts": parts}],
-                          "generationConfig": {"responseMimeType": "application/json"}})
-                r.raise_for_status()
-                raw = "".join(p.get("text", "") for c in r.json().get("candidates", [])
-                              for p in c.get("content", {}).get("parts", []))
-            else:
-                blocks = [{"type": "text", "text": prompt}]
-                blocks.extend(
-                    {"type": "image", "source": {
-                        "type": "base64", "media_type": "image/jpeg", "data": b,
-                    }}
-                    for b in images
-                )
-                r = await client.post("https://api.anthropic.com/v1/messages",
-                    headers={"x-api-key": key, "anthropic-version": "2023-06-01"},
-                    json={"model": model,
-                          "max_tokens": 2400, "system": system,
-                          "messages": [{"role": "user", "content": blocks}]})
-                r.raise_for_status()
-                raw = "".join(c.get("text", "") for c in r.json().get("content", [])
-                              if c.get("type") == "text")
-        raw = raw.strip()
-        if raw.startswith(chr(96) * 3) or raw.startswith("~~~"):
-            raw = raw.split("\n", 1)[1].rsplit("\n", 1)[0]
-        result = json.loads(raw)
+        result = await complete_json(credentials, system, prompt, images)
         def clean(value, limit):
             value = str(value)
             return (value.replace(key, "[redacted]") if key else value)[:limit]
