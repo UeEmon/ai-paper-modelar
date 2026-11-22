@@ -7,6 +7,8 @@ from typing import Literal
 from xml.sax.saxutils import escape
 
 from pydantic import BaseModel, Field, model_validator
+
+from .net_engine import build_parametric_parts
 from reportlab.lib.colors import HexColor
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.units import mm
@@ -18,7 +20,7 @@ AREA_X, AREA_Y, AREA_W, AREA_H, OVERLAP = 12.0, 28.0, 186.0, 225.0, 5.0
 Style = Literal["faithful", "standard", "anime", "retro", "easy"]
 Roof = Literal["gable", "flat"]
 SubjectType = Literal["architecture", "vehicle", "landscape", "prop", "character", "original", "railway", "other"]
-Template = Literal["building", "box"]
+Template = Literal["building", "box", "cylinder", "cone", "prism", "pyramid"]
 InputUnit = Literal["m", "cm", "mm"]
 
 
@@ -35,6 +37,8 @@ class ModelSpec(BaseModel):
     subject_type: SubjectType = "architecture"
     template: Template = "building"
     input_unit: InputUnit = "m"  # Display preference; actual dimensions remain metres.
+    sides: int = Field(default=6, ge=3, le=12, description="Regular polygon side count")
+    top_ratio: float = Field(default=0.5, ge=0, le=1, description="Cone top diameter / base diameter")
 
     @model_validator(mode="after")
     def check(self):
@@ -189,6 +193,8 @@ def box_parts(spec: ModelSpec) -> list[dict]:
 
 
 def build_parts(spec: ModelSpec) -> list[dict]:
+    if spec.template in {"cylinder", "cone", "prism", "pyramid"}:
+        return build_parametric_parts(spec, COLORS[spec.style][0])
     if spec.template == "box":
         return box_parts(spec)
     w = miniature_mm(spec.width_m, spec.scale)
@@ -223,18 +229,19 @@ def page_jobs(spec: ModelSpec) -> list[dict]:
     for part in build_parts(spec):
         nx = _num_tiles(part["w"], AREA_W)
         ny = _num_tiles(part["h"], AREA_H)
+        if len(jobs) + nx * ny > 100:
+            raise ValueError("The model requires over 100 A4 pages; use smaller dimensions or a larger scale denominator")
         for yi in range(ny):
             for xi in range(nx):
                 jobs.append({"part": part, "x": xi * (AREA_W - OVERLAP),
                              "y": yi * (AREA_H - OVERLAP),
                              "tile": (xi + 1, yi + 1, nx, ny)})
-    if len(jobs) > 100:
-        raise ValueError("The model requires over 100 A4 pages; use a smaller model or scale")
     return jobs
 
 
 def summary(spec: ModelSpec) -> dict:
-    d = miniature_mm(spec.depth_m, spec.scale)
+    round_or_regular = spec.template in {"cylinder", "cone", "prism", "pyramid"}
+    d = miniature_mm(spec.width_m if round_or_regular else spec.depth_m, spec.scale)
     rise = d / 2 * tan(radians(spec.pitch_deg)) if spec.template == "building" and spec.roof == "gable" else 0
     jobs = page_jobs(spec)
     return {
@@ -247,14 +254,16 @@ def summary(spec: ModelSpec) -> dict:
         "scale": spec.scale,
         "subject_type": spec.subject_type,
         "template": spec.template,
+        "geometry": {"sides": spec.sides, "top_ratio": spec.top_ratio},
         "parts": [{"name": p["name"], "width_mm": round(p["w"], 1),
                    "height_mm": round(p["h"], 1)} for p in build_parts(spec)],
         "pages": len(jobs),
         "warnings": [
             "Dimensions are supplied by the user, not verified from online sources.",
             ("Windows and doors are illustrative printed details." if spec.template == "building"
-             else "Box template is a basic cuboid, not an automatic reconstruction of the subject."),
+             else "Shape is a parametric approximation, not an automatic reconstruction of the subject."),
             "Large parts are tiled with 5 mm overlap for assembly.",
+            "Cut and fold parts are designed for test assembly; paper thickness and kerf are not compensated.",
         ],
     }
 
