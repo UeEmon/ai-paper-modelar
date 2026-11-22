@@ -180,6 +180,7 @@ async def proposals(req: ProposalRequest, credentials: AICredentials | None = No
         "sides (integer 3..12), top_ratio (0..1). Units are metres before scale. "
         "For cone use bottom diameter for width_m, top/bottom diameter ratio for "
         "top_ratio, wall height for height_m; round shapes use depth_m=width_m. "
+        "Online sources are search snippets or encyclopedia introductions, not full pages. Never claim to have read an entire linked page or verified that a website is official. "
         "Ground the title, description and template choice in selected reference "
         "features. design_basis must explain which cited feature led to the design, "
         "what is simplified, and that dimensions are estimated unless measured by "

@@ -225,26 +225,28 @@ async function search(){
   el("search").disabled=true;status("公開資料を検索中");
   try{
     if(q.length<2)throw Error("検索語を2文字以上で入力してください。");
-    const r=await fetch("/api/research?q="+encodeURIComponent(q),{signal:controller.signal});
-    if(!r.ok)throw Error("Wikipediaへの接続に失敗しました。");
+    const r=await fetch("/api/research?q="+encodeURIComponent(q)+"&scope="+encodeURIComponent(el("researchScope").value),{signal:controller.signal});
+    if(!r.ok)throw Error("公開資料の検索に失敗しました。時間をおいて再試行してください。");
     const data=await r.json();
     if(request!==researchRequest||q!==el("place").value.trim()||project!==(window.paperLibrary?.projectId||null))return;
     sourceQuery=q;sourceProject=project;
     sources=data.results.filter(source=>{
-      try{const url=new URL(source.url);return url.protocol==="https:"&&url.hostname==="ja.wikipedia.org";}catch{return false;}
-    }).map((source,index)=>({...source,selected:index===0}));
+      try{const url=new URL(source.url);return ["http:","https:"].includes(url.protocol)&&url.hostname&&!url.username&&!url.password;}catch{return false;}
+    }).map((source,index)=>({...source,selected:index===0&&source.query_match!==false}));
     for(const src of sources){
       const card=text(el("research"),"div","","reference");
       const label=text(card,"label","","referenceChoice");
       const checkbox=document.createElement("input");checkbox.type="checkbox";checkbox.checked=src.selected;
       checkbox.setAttribute("aria-label",src.title+" をAIの参考資料に使う");label.appendChild(checkbox);
       text(label,"span","AIに使う");
-      checkbox.addEventListener("change",()=>{src.selected=checkbox.checked;clearProposals();researchState();});
+      checkbox.addEventListener("change",()=>{if(checkbox.checked&&selectedSources().length>=8){checkbox.checked=false;status("AIに使う検索資料は8件までです。");return;}src.selected=checkbox.checked;clearProposals();researchState();});
       const link=text(card,"a",src.title);link.href=src.url;link.target="_blank";link.rel="noopener noreferrer";
       text(card,"p",src.summary||"概要なし");
-      text(card,"small","二次資料・寸法未検証","muted");
+      if(src.query_match===false)text(card,"small","検索語との一致が少ない候補です。関連性を確認してください。","muted");
+      text(card,"small",(src.provider==="web"?"Web検索":src.provider==="wikipedia"?"Wikipedia":"公開資料")+" · "+new URL(src.url).hostname+" · 寸法・利用条件は未検証","muted");
     }
     text(el("research"),"p",sources.length?data.note:"該当する資料がありません。名前を変えて検索するか、資料なしでAI提案を作成できます。","muted");
+    for(const warning of data.warnings||[])text(el("research"),"p",warning,"warning");
     researchState();status(sources.length+"件を取得・"+selectedSources().length+"件を選択");
   }catch(e){
     if(request!==researchRequest||e.name==="AbortError")return;
@@ -273,7 +275,7 @@ async function plan(){
   const area=el("proposals");area.replaceChildren();
   const request=++proposalRequest;
   const place=el("place").value.trim(),project=window.paperLibrary?.projectId||null;
-  const references=selectedSources().map(s=>({title:s.title,url:s.url,summary:s.summary}));
+  const references=selectedSources().map(s=>({title:s.title,url:s.url,summary:s.summary,...(s.source_type?{source_type:s.source_type}:{})}));
   el("plan").disabled=true;status("デザイン案を作成中");
   try{
     const r=await post("/api/proposals",{
@@ -345,6 +347,7 @@ async function pdf(){
   finally{el("savePdf").disabled=false;}
 }
 el("search").addEventListener("click",search);
+el("researchScope").addEventListener("change",()=>clearResearch("検索範囲を変更しました。もう一度、資料検索を押してください。"));
 el("place").addEventListener("input",()=>{
   clearResearch("題材を変更しました。資料を再検索してください。");
   el("appliedDesign").hidden=true;invalidatePreview();
