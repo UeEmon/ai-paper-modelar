@@ -47,10 +47,10 @@
     byId("meshViewer").hidden = false;
   }
 
-  async function generate() {
+  async function generate(fileOverride = null) {
     const input = byId("meshFile");
-    if (!input.files.length) {note("OBJまたはSTLファイルを選択してください。", "warning");return;}
-    const file = input.files[0];
+    const file = fileOverride instanceof File ? fileOverride : input.files[0];
+    if (!file) {note("OBJまたはSTLファイルを選択してください。", "warning");return;}
     if (!/\.(obj|stl)$/i.test(file.name) || file.size > 5 * 1024 * 1024) {
       byId("meshResults").replaceChildren();
       note("OBJ/STLファイル（5MB以内）を選んでください。", "warning");
@@ -72,6 +72,21 @@
       pageIndex = 0;
       renderMetadata();
       showPage();
+      const library = window.paperLibrary;
+      if (library?.projectId && byId("meshSaveOriginal").checked) {
+        try {
+          const form = new FormData();
+          form.append("file", file, file.name);
+          form.append("view", "other");
+          form.append("notes", "3Dモデル（座標単位："+byId("meshUnit").value+"、展開縮尺 1/"+byId("meshScale").value+"）");
+          const response = await fetch(library.url("/assets"),{method:"POST",body:form});
+          if (!response.ok) throw new Error(await getError(response));
+          await library.refresh(library.projectId);
+          note("原本を制作プロジェクトへ保存しました。");
+        } catch (error) {
+          note("展開図は作成できましたが原本保存に失敗："+error.message, "warning");
+        }
+      }
       try{sessionStorage.setItem("paper-modelar-last-mesh-job",job.id);}catch{}
     } catch (error) {
       byId("meshResults").replaceChildren();
@@ -134,5 +149,12 @@
     note("プレビューを表示できません。ジョブが期限切れの場合は再度アップロードしてください。","warning");
   });
 
+  window.meshWorkbench = {
+    loadFile: async (file) => {
+      byId("meshSaveOriginal").checked = false; // Original is already in the project.
+      await generate(file);
+      byId("meshViewer").scrollIntoView({behavior:"smooth",block:"nearest"});
+    }
+  };
   restore();
 })();
