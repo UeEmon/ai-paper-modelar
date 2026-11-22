@@ -206,6 +206,7 @@
 <label for="aiProvider">プロバイダー</label><select id="aiProvider"><option value="none">使わない（定型案）</option><option value="openai">OpenAI</option><option value="gemini">Gemini</option><option value="anthropic">Anthropic</option><option value="ollama">Ollama（ローカル）</option><option value="local_openai">OpenAI互換（ローカル / LM Studio等）</option></select>
 <div id="aiLocal" hidden>
 <label for="aiEndpoint">ローカルLLMの接続先URL</label><input id="aiEndpoint" type="url" maxlength="2048" autocomplete="off" spellcheck="false">
+<button id="aiResetEndpoint" type="button" class="secondary">標準の接続先へ戻す</button>
 <p class="muted">アプリサーバーから接続します。同じPCなら localhost、Docker利用時は host.docker.internal を指定してください。別PC上のアプリから、ブラウザ側PCのlocalhostには接続できません。</p>
 <label class="localVision" for="aiVision"><input id="aiVision" type="checkbox">画像対応モデルとして資料画像を送信する</label>
 <p class="muted">通常はテキストのみ。画像を送るには、資料欄のAI参照許可も必要です。接続先が許可されていない場合はREADMEの設定を確認してください。</p>

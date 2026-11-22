@@ -4,6 +4,7 @@ import base64
 import json
 import re
 import os
+from pathlib import Path
 from urllib.parse import urlsplit
 from dataclasses import dataclass, field
 from typing import Literal
@@ -33,6 +34,10 @@ DEFAULT_LOCAL_URLS = {
 }
 
 
+def in_container() -> bool:
+    return Path("/.dockerenv").is_file()
+
+
 def local_endpoint(value: str) -> str:
     """Only server-approved destinations; browser settings cannot expand the allowlist."""
     def normalize(url):
@@ -51,7 +56,33 @@ def local_endpoint(value: str) -> str:
     }
     if endpoint not in allowed:
         raise ValueError("Unapproved endpoint")
+    # In the standard single-process Docker image, loopback means the container,
+    # while the user's local LLM runs on the Docker host. An explicit allowlist
+    # retains literal endpoint semantics for custom deployments.
+    parts = urlsplit(endpoint)
+    if (configured is None and in_container()
+            and parts.hostname in {"localhost", "127.0.0.1", "::1"}):
+        mapped = "http://host.docker.internal:" + str(parts.port) + parts.path
+        if mapped in allowed:
+            return mapped
     return endpoint
+
+
+def local_defaults():
+    defaults = {}
+    for provider, native in {"ollama": "http://localhost:11434",
+                             "local_openai": "http://localhost:1234/v1"}.items():
+        defaults[provider] = None
+        candidates = [native.replace("localhost", "host.docker.internal"), native] if in_container() else [native]
+        for candidate in candidates:
+            try:
+                defaults[provider] = local_endpoint(candidate)
+                break
+            except ValueError:
+                continue
+    return {"runtime": "docker" if in_container() else "native",
+            "automatic_host_mapping": os.getenv("PAPER_MODELAR_LOCAL_AI_URLS") is None,
+            "endpoints": defaults}
 
 
 def credentials_from_headers(headers):
@@ -395,7 +426,7 @@ async def check_connection(credentials: AICredentials):
             data = response.json()
             if not isinstance(data, dict) or not isinstance(data.get(expected), (list, dict)):
                 raise ValueError("Unexpected response")
-        return 200, {"ok": True, "message": "接続テストに成功しました。"}
+        return 200, {"ok": True, "message": "接続テストに成功しました。", **({"endpoint": endpoint} if local else {})}
     except httpx.HTTPStatusError as exc:
         status = exc.response.status_code
         if status in {401, 403}:
@@ -472,7 +503,7 @@ async def available_models(credentials: AICredentials):
                 params["pageToken" if provider == "gemini" else "after_id"] = cursor
                 if page == 4:
                     truncated = True
-        return 200, {"ok": True, "models": sorted(models.values(), key=lambda m: m["id"]), "truncated": truncated}
+        return 200, {"ok": True, "models": sorted(models.values(), key=lambda m: m["id"]), "truncated": truncated, **({"endpoint": endpoint} if local else {})}
     except httpx.HTTPStatusError as exc:
         status = exc.response.status_code
         message = ("認証に失敗しました。APIキーとモデル一覧の閲覧権限を確認してください。" if status in {401, 403}

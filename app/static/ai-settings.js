@@ -3,11 +3,23 @@
   const get=id=>document.getElementById(id);
   const {AIVault,defaults,endpoints,isLocal,PREFIX}=window.PaperAIVault;
   let vault,modelRequest=0,modelController=null;
+  let localConfig={endpoints:{...endpoints},runtime:"native",automatic_host_mapping:false};
+  async function refreshLocalConfig(){
+    const response=await fetch("/api/ai/local-config",{cache:"no-store",redirect:"error"});
+    if(!response.ok)throw Error("標準の接続先を確認できませんでした。");
+    localConfig=await response.json();return localConfig;
+  }
+  function effectiveEndpoint(provider,value){
+    if(localConfig.runtime==="docker"&&localConfig.automatic_host_mapping&&localConfig.endpoints[provider]){
+      try{const url=new URL(value);if(["localhost","127.0.0.1","[::1]"].includes(url.hostname)&&value.replace(/\/+$/,"")===endpoints[provider])return localConfig.endpoints[provider];}catch{}
+    }
+    return value;
+  }
   const message=value=>{get("aiMessage").textContent=value;};
   function fields(){
     const provider=get("aiProvider").value,config=vault.data?.providers[provider];
     get("aiLocal").hidden=!isLocal(provider);
-    get("aiEndpoint").value=config?.endpoint||endpoints[provider]||"";
+    get("aiEndpoint").value=effectiveEndpoint(provider,config?.endpoint||localConfig.endpoints[provider]||endpoints[provider]||"");
     get("aiVision").checked=config?.vision===true;
     get("aiKeyHint").textContent=isLocal(provider)?"APIキー（任意・空欄なら保存済みキーを維持）":"APIキー（空欄なら選択先の保存済みキーを維持）";
     get("aiModel").value=config?.model||defaults[provider]||"";
@@ -31,9 +43,9 @@
   let busy=false;
   async function action(work,{refresh=true}={}){
     if(busy)return;busy=true;
-    for(const id of ["aiCreate","aiUnlock","aiSave","aiTest","aiDelete","aiModels"])get(id).disabled=true;
+    for(const id of ["aiCreate","aiUnlock","aiSave","aiTest","aiDelete","aiModels","aiResetEndpoint"])get(id).disabled=true;
     try{await work();}catch(error){message(error.message);}
-    finally{busy=false;for(const id of ["aiCreate","aiUnlock","aiSave","aiTest","aiDelete","aiModels"])get(id).disabled=false;if(refresh)render();get("aiModels").disabled=get("aiProvider").value==="none";}
+    finally{busy=false;for(const id of ["aiCreate","aiUnlock","aiSave","aiTest","aiDelete","aiModels","aiResetEndpoint"])get(id).disabled=false;if(refresh)render();get("aiModels").disabled=get("aiProvider").value==="none";}
   }
   try{
     if(!window.isSecureContext||!window.crypto?.subtle)throw Error();
@@ -43,6 +55,15 @@
     message("暗号化保存を利用できません。HTTPSまたはlocalhostで開き、ブラウザ保存を許可してください。定型案は利用できます。");
     window.paperAI={headers:()=>({})};return;
   }
+  refreshLocalConfig().catch(()=>{});
+  get("aiResetEndpoint").addEventListener("click",()=>action(async()=>{
+    const provider=get("aiProvider").value;
+    const config=await refreshLocalConfig();
+    const endpoint=config.endpoints?.[provider];
+    if(!endpoint)throw Error("標準の接続先がサーバーの許可URLにありません。管理者の接続先設定を確認してください。");
+    get("aiEndpoint").value=endpoint;resetModels();
+    message("接続先を "+endpoint+" に戻しました。モデル一覧を取得して、接続を確認して保存してください。");
+  },{refresh:false}));
   window.paperAI={headers:()=>vault.headers()};
   get("aiProfile").addEventListener("change",()=>{vault.lock();render();message("選択したプロファイルを解除してください。");});
   get("aiProvider").addEventListener("change",fields);
@@ -85,6 +106,7 @@
       const result=await response.json().catch(()=>({}));
       if(request!==modelRequest||candidate.epoch!==vault.epoch)return;
       if(!response.ok||result.ok!==true||!Array.isArray(result.models))throw Error(result.message||"モデル一覧を取得できませんでした。モデルIDを手入力することもできます。");
+      if(isLocal(candidate.provider)&&result.endpoint)get("aiEndpoint").value=result.endpoint;
       const select=get("aiModelSelect");select.replaceChildren(new Option("モデルを選択（IDは手入力も可能）", ""));
       for(const model of result.models)select.add(new Option(model.name===model.id?model.id:model.name+"（"+model.id+"）",model.id));
       select.disabled=result.models.length===0;
@@ -104,6 +126,7 @@
     const result=await response.json().catch(()=>({}));
     if(candidate.epoch!==vault.epoch)throw Error("プロファイルが切り替わったため、接続テストの結果を破棄しました。");
     if(!response.ok||result.ok!==true)throw Error(result.message||"接続テストに失敗しました。");
+    if(isLocal(candidate.provider)&&result.endpoint){candidate.options.endpoint=result.endpoint;get("aiEndpoint").value=result.endpoint;}
   }
   get("aiTest").addEventListener("click",()=>action(async()=>{
     const candidate=draft();await testDraft(candidate);
