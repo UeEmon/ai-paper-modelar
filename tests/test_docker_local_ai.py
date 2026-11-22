@@ -28,12 +28,13 @@ def test_existing_browser_endpoint_fetches_models_from_host_in_docker(monkeypatc
     monkeypatch.setattr(ai,'in_container',lambda:True)
     original=httpx.AsyncClient;calls=[]
     def handler(request):
-        calls.append(str(request.url));return httpx.Response(200,json={'models':[{'name':'gemma:latest'}]})
+        calls.append(str(request.url))
+        return httpx.Response(200,json={'capabilities':['completion','vision']} if request.url.path=='/api/show' else {'models':[{'name':'gemma:latest'}]})
     monkeypatch.setattr(ai.httpx,'AsyncClient',lambda **kw:original(transport=httpx.MockTransport(handler),**kw))
     r=client.post('/api/ai/models',headers={'X-AI-Provider':'ollama','X-AI-Endpoint':'http://localhost:11434'})
     assert r.status_code==200 and r.json()['models'][0]['id']=='gemma:latest'
     assert r.json()['endpoint']=='http://host.docker.internal:11434'
-    assert calls==['http://host.docker.internal:11434/api/tags']
+    assert calls==['http://host.docker.internal:11434/api/tags','http://host.docker.internal:11434/api/show']
 
 
 def test_runtime_defaults_are_safe_and_do_not_disclose_custom_hosts(monkeypatch):

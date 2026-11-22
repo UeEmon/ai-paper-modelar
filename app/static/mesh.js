@@ -82,7 +82,7 @@
           const response = await fetch(library.url("/assets"),{method:"POST",body:form});
           if (!response.ok) throw new Error(await getError(response));
           await library.refresh(library.projectId);
-          note("原本を制作プロジェクトへ保存しました。");
+          note("原本を一時作業へ追加しました（ディスク保存なし）。");
         } catch (error) {
           note("展開図は作成できましたが原本保存に失敗："+error.message, "warning");
         }

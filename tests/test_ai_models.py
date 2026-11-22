@@ -16,13 +16,14 @@ def headers(provider='openai',key='test-catalogue-key'):
 @pytest.mark.parametrize('provider',['openai','gemini','anthropic','ollama','local_openai'])
 def test_normalized_catalogues_use_get_and_do_not_need_a_model(monkeypatch,provider):
     original=httpx.AsyncClient;sent=[];options=[]
-    ids=['org/model:q4','another-model'] if provider in ai.LOCAL_PROVIDERS else ['chat-model','another-model']
+    ids=['org/model:q4','another-model'] if provider in ai.LOCAL_PROVIDERS else (['gemini-2.5-flash','gemini-2.5-pro'] if provider=='gemini' else ['gpt-4.1','gpt-4o'] if provider=='openai' else ['claude-sonnet-4-5','claude-opus-4-1'])
     def handler(request):
         sent.append(request)
+        if request.url.path=='/api/show':return httpx.Response(200,json={'capabilities':['completion','vision']})
         if provider=='gemini':
             data={'models':[{'name':'models/'+model,'displayName':model,'supportedGenerationMethods':['generateContent']} for model in ids]+[{'name':'models/embed-only','supportedGenerationMethods':['embedContent']}]}
         elif provider=='ollama':data={'models':[{'name':model} for model in ids]}
-        else:data={'data':[{'id':model,'display_name':model} for model in ids]}
+        else:data={'data':[{'id':model,'display_name':model,'type':'vlm'} for model in ids]}
         return httpx.Response(200,json=data)
     def fake(**kw):options.append(kw);return original(transport=httpx.MockTransport(handler),**kw)
     monkeypatch.setattr(ai.httpx,'AsyncClient',fake)
@@ -46,28 +47,28 @@ def test_paginated_catalogues_remain_on_fixed_url_and_deduplicate(monkeypatch,pr
     original=httpx.AsyncClient;sent=[]
     def handler(request):
         sent.append(request)
-        entries=[{'name':'models/second','supportedGenerationMethods':['generateContent']},{'name':'models/first','supportedGenerationMethods':['generateContent']}] if provider=='gemini' else [{'id':'second'},{'id':'first'}]
+        entries=[{'name':'models/gemini-2.5-pro','supportedGenerationMethods':['generateContent']},{'name':'models/gemini-2.5-flash','supportedGenerationMethods':['generateContent']}] if provider=='gemini' else [{'id':'claude-sonnet-4-5'},{'id':'claude-opus-4-1'}]
         if provider=='gemini':
             body={'models':entries if len(sent)==2 else entries[:1]}
             if len(sent)==1:body['nextPageToken']='next-token'
         else:
-            body={'data':entries if len(sent)==2 else entries[:1],'has_more':len(sent)==1,'last_id':'second'}
+            body={'data':entries if len(sent)==2 else entries[:1],'has_more':len(sent)==1,'last_id':'claude-sonnet-4-5'}
         return httpx.Response(200,json=body)
     monkeypatch.setattr(ai.httpx,'AsyncClient',lambda **kw:original(transport=httpx.MockTransport(handler),**kw))
     r=client.post('/api/ai/models',headers=headers(provider))
-    assert [m['id'] for m in r.json()['models']]==['first','second']
+    assert [m['id'] for m in r.json()['models']]==(['gemini-2.5-flash','gemini-2.5-pro'] if provider=='gemini' else ['claude-opus-4-1','claude-sonnet-4-5'])
     assert len(sent)==2
     assert sent[0].url.host==sent[1].url.host
-    assert sent[1].url.params['pageToken' if provider=='gemini' else 'after_id']==('next-token' if provider=='gemini' else 'second')
+    assert sent[1].url.params['pageToken' if provider=='gemini' else 'after_id']==('next-token' if provider=='gemini' else 'claude-sonnet-4-5')
 
 
 def test_corrupt_and_secret_model_metadata_are_filtered(monkeypatch):
     original=httpx.AsyncClient
     def handler(request):
-        return httpx.Response(200,json={'data':[{'id':'valid','display_name':'test-catalogue-key name'},{'id':'bad\nmodel'},{'id':'test-catalogue-key'},{'id':'x'*121},None,{'id':12}]})
+        return httpx.Response(200,json={'data':[{'id':'gpt-4.1','display_name':'test-catalogue-key name'},{'id':'bad\nmodel'},{'id':'test-catalogue-key'},{'id':'x'*121},None,{'id':12}]})
     monkeypatch.setattr(ai.httpx,'AsyncClient',lambda **kw:original(transport=httpx.MockTransport(handler),**kw))
     r=client.post('/api/ai/models',headers=headers())
-    assert [m['id'] for m in r.json()['models']]==['valid']
+    assert [m['id'] for m in r.json()['models']]==['gpt-4.1']
     assert 'test-catalogue-key' not in r.text
 
 
@@ -97,9 +98,9 @@ def test_models_are_capped_and_page_cycles_stop(monkeypatch):
     monkeypatch.setattr(ai.httpx,'AsyncClient',lambda **kw:original(transport=httpx.MockTransport(handler),**kw))
     r=client.post('/api/ai/models',headers=headers('gemini'))
     assert len(sent)==2 and r.json()['truncated'] is True
-    def many(request):return httpx.Response(200,json={'data':[{'id':f'model-{i}'} for i in range(1100)]})
+    def many(request):return httpx.Response(200,json={'data':[{'id':f'claude-sonnet-4-5-{20260000+i}'} for i in range(1100)]})
     monkeypatch.setattr(ai.httpx,'AsyncClient',lambda **kw:original(transport=httpx.MockTransport(many),**kw))
-    r=client.post('/api/ai/models',headers=headers())
+    r=client.post('/api/ai/models',headers=headers('anthropic'))
     assert len(r.json()['models'])==1000 and r.json()['truncated'] is True
 
 

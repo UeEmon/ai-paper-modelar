@@ -2,7 +2,7 @@
 /* No plaintext secrets, passphrases or decryption keys are persisted. */
 (function(root){
   const PREFIX="paper-modelar-ai-v1:";
-  const defaults={openai:"gpt-4.1-mini",gemini:"gemini-2.5-flash",anthropic:"claude-sonnet-4-5",ollama:"qwen3:8b",local_openai:"local-model"};
+  const defaults={openai:"gpt-4.1-mini",gemini:"gemini-2.5-flash",anthropic:"claude-sonnet-4-5",ollama:"",local_openai:""};
   const endpoints={ollama:"http://localhost:11434",local_openai:"http://localhost:1234/v1"};
   const isLocal=provider=>Object.hasOwn(endpoints,provider);
   function validEndpoint(value){
@@ -86,6 +86,26 @@
       const record=await this.encrypt(id,old.name,this.salt,this.key,data);
       if(epoch!==this.epoch)throw Error("操作が切り替わりました。");
       this.storage.setItem(PREFIX+id,JSON.stringify(record));this.data=data;
+    }
+    prepare3D(provider,model,apiKey){
+      if(!this.data)throw Error("プロファイルを解除してください。");
+      const data=structuredClone(this.data);
+      if(!["huggingface","meshy","tripo"].includes(provider)||!/^[A-Za-z0-9][A-Za-z0-9._-]{0,119}$/.test(model))throw Error("3Dモデルを選択してください。");
+      const key=apiKey||data.threeD?.providers?.[provider]?.apiKey||"";
+      if((provider!=="huggingface"&&!key)||!/^[!-~]{0,512}$/.test(key))throw Error("3D APIキーを入力してください。");
+      data.threeD=data.threeD||{providers:{}};data.threeD.provider=provider;
+      data.threeD.providers[provider]={model,apiKey:key};return data;
+    }
+    async save3D(provider,model,apiKey){
+      const epoch=this.epoch,id=this.id,data=this.prepare3D(provider,model,apiKey);
+      const old=JSON.parse(this.storage.getItem(PREFIX+id));
+      const record=await this.encrypt(id,old.name,this.salt,this.key,data);
+      if(epoch!==this.epoch)throw Error("操作が切り替わりました。");
+      this.storage.setItem(PREFIX+id,JSON.stringify(record));this.data=data;
+    }
+    headers3D(data=this.data){
+      const provider=data?.threeD?.provider,config=data?.threeD?.providers?.[provider];
+      return config?{"X-3D-Provider":provider,"X-3D-Model":config.model,...(config.apiKey?{"X-3D-Key":config.apiKey}:{})}:{};
     }
     remove(id){this.lock();this.storage.removeItem(PREFIX+id);}
     headers(data=this.data){

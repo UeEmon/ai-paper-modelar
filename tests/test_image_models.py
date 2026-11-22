@@ -104,7 +104,7 @@ def test_image_search_metadata_and_safe_preview_loading(monkeypatch):
     assert item['author']=='Photographer'
     r=client.get(item['preview_url']);assert r.status_code==200 and r.headers['content-type'].startswith('image/jpeg')
     assert len(calls)==2
-    client.get(item['preview_url']);assert len(calls)==2
+    client.get(item['preview_url']);assert len(calls)==3
 
 
 @pytest.mark.parametrize('url',['http://upload.wikimedia.org/wikipedia/commons/a/b.jpg','https://evil.test/wikipedia/commons/a.jpg','https://user:secret@upload.wikimedia.org/wikipedia/commons/a.jpg','https://upload.wikimedia.org:443/wikipedia/commons/a.jpg','https://upload.wikimedia.org/private/file.jpg'])

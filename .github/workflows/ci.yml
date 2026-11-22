@@ -51,6 +51,7 @@ jobs:
         run: |
           node --check app/static/tabs.js
           node --check app/static/image-model.js
+          node --check app/static/outputs.js
           node --check app/static/ai-vault.js
           node --check app/static/ai-settings.js
       - name: JavaScript syntax check

@@ -13,6 +13,7 @@ from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from fastapi.responses import Response
 from pydantic import BaseModel, Field, ValidationError
 
+from .retention import save_output
 from .generator import ModelSpec, page_jobs, render_pdf, render_svg
 from .mesh_unfolder import MAX_MESH_BYTES, MeshError, load_mesh, unfold
 
@@ -46,7 +47,7 @@ def _prune():
     now = time.time()
     for key, item in list(_jobs.items()):
         if now - item.created_at >= SESSION_TTL:
-            del _jobs[key]
+            _jobs.pop(key,None)
 
 
 def _job(job_id: str) -> MeshJob:
@@ -105,8 +106,10 @@ def svg(job_id: str, page: int):
     item = _job(job_id)
     if not 0 <= page < item.pages:
         raise HTTPException(404, "該当するページはありません。")
+    rendered = render_svg(item.spec, page, parts=item.parts)
+    save_output(rendered, "svg")
     return Response(
-        render_svg(item.spec, page, parts=item.parts),
+        rendered,
         media_type="image/svg+xml",
         headers={"Cache-Control": "no-store", "X-Content-Type-Options": "nosniff"},
     )
@@ -115,8 +118,10 @@ def svg(job_id: str, page: int):
 @router.get("/jobs/{job_id}/template.pdf")
 def pdf(job_id: str):
     item = _job(job_id)
+    rendered = render_pdf(item.spec, parts=item.parts)
+    save_output(rendered, "pdf")
     return Response(
-        render_pdf(item.spec, parts=item.parts),
+        rendered,
         media_type="application/pdf",
         headers={
             "Content-Disposition": 'attachment; filename="mesh-net.pdf"',

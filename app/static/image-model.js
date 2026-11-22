@@ -6,7 +6,17 @@
   const note=text=>{get("imageMessage").textContent=text;};
   const add=(parent,tag,value)=>{const item=document.createElement(tag);item.textContent=value;parent.appendChild(item);return item;};
   function clearModel(){model=null;get("imageModelInfo").hidden=true;get("imagePlaceholder").hidden=false;get("imageObj").disabled=true;get("imageUnfold").disabled=true;draw();}
-  function controls(){get("imageGenerate").disabled=generating||!selected||!get("imageConsent").checked;}
+  function external(){return get("imageMethod").value==="external";}
+  function currentHeaders(){return external()?(window.paperAI.headers3D?.()||{}):window.paperAI.headers();}
+  function controls(){get("imageGenerate").disabled=generating||!selected||!get("imageConsent").checked||(external()&&!get("externalCostConsent").checked);}
+  get("imageMethod").addEventListener("change",()=>{
+    version++;get("externalCostLabel").hidden=!external();get("externalCostConsent").checked=false;get("imageConsent").checked=false;
+    get("imageGenerate").textContent=external()?"外部APIで3Dを生成（料金／無料枠を使用）":"選択画像から簡易3Dを生成";
+    const h=currentHeaders();get("imageMethodHint").textContent=external()?"使用する外部API："+(h["X-3D-Provider"]||"未設定。AI設定で保存してください。")+" / "+(h["X-3D-Model"]||""):"既存の画像対応AIで、基本立体を組み合わせた簡易3Dを作ります。";
+    clearModel();controls();
+  });
+  window.addEventListener("paper-ai-change",()=>{version++;get("imageConsent").checked=false;get("externalCostConsent").checked=false;if(external()){const h=currentHeaders();get("imageMethodHint").textContent="使用する外部API："+(h["X-3D-Provider"]||"未設定")+" / "+(h["X-3D-Model"]||"");}clearModel();controls();});
+  get("externalCostConsent").addEventListener("change",()=>{version++;controls();});
   function draw(){
     const rect=canvas.getBoundingClientRect();if(!rect.width)return;
     const ratio=window.devicePixelRatio||1;canvas.width=rect.width*ratio;canvas.height=rect.height*ratio;
@@ -71,18 +81,18 @@
     finally{if(request===searchVersion)get("imageSearch").disabled=false;}
   });
   get("imageGenerate").addEventListener("click",async()=>{
-    if(generating||!selected||!get("imageConsent").checked)return;
-    const request=++version,image=selected,headers=window.paperAI.headers();
-    if(!headers["X-AI-Provider"]){note("AI設定でプロファイルを解除し、画像対応モデルを保存してください。");return;}
-    generating=true;get("imageGenerate").disabled=true;clearModel();note("画像をAIで読み取り、簡易3Dモデルを生成しています…");
+    if(generating||!selected||!get("imageConsent").checked||(external()&&!get("externalCostConsent").checked))return;
+    const request=++version,image=selected,headers=currentHeaders();
+    if(!headers[external()?"X-3D-Provider":"X-AI-Provider"]){note("AI設定でプロファイルを解除し、使用するモデルの設定を保存してください。");return;}
+    generating=true;get("imageGenerate").disabled=true;clearModel();note(external()?"外部3D生成APIへ依頼しています。待ち行列を含め数分かかります。この画面でお待ちください。":"画像をAIで読み取り、簡易3Dモデルを生成しています…");
     try{
-      const response=await fetch("/api/image-model/generate",{method:"POST",headers:{"Content-Type":"application/json",...headers},cache:"no-store",redirect:"error",body:JSON.stringify({image_id:image.id,name:(get("imageQuery").value.trim()||get("place").value.trim()||"画像からの模型").slice(0,80),height_mm:Number(get("imageHeight").value),consent:true})});
+      const response=await fetch(external()?"/api/3d/generate":"/api/image-model/generate",{method:"POST",headers:{"Content-Type":"application/json",...headers},cache:"no-store",redirect:"error",body:JSON.stringify({image_id:image.id,name:(get("imageQuery").value.trim()||get("place").value.trim()||"画像からの模型").slice(0,80),height_mm:Number(get("imageHeight").value),consent:true,cost_consent:external()&&get("externalCostConsent").checked})});
       const data=await response.json();if(request!==version)return;if(!response.ok)throw Error(typeof data.detail==="string"?data.detail:"3D生成に失敗しました。");
-      if(JSON.stringify(headers)!==JSON.stringify(window.paperAI.headers())){note("AI設定が変わったため、生成結果を破棄しました。");return;}
+      if(JSON.stringify(headers)!==JSON.stringify(currentHeaders())){note("AI設定が変わったため、生成結果を破棄しました。");return;}
       model=data;get("imagePlaceholder").hidden=true;get("imageModelInfo").hidden=false;get("imageModelInfo").replaceChildren();
-      add(get("imageModelInfo"),"strong",data.components.length+"部品 / "+data.faces.length+"三角形 / 幅×高さ×奥行 "+data.size_mm.join(" × ")+" mm");
+      add(get("imageModelInfo"),"strong",(data.components.length?data.components.length+"部品":data.provider+" 生成メッシュ")+" / "+data.faces.length+"三角形 / 幅×高さ×奥行 "+data.size_mm.join(" × ")+" mm");
       for(const text of [...data.warnings,...data.notes])add(get("imageModelInfo"),"p",text);
-      get("imageObj").disabled=false;get("imageUnfold").disabled=false;draw();note("簡易3Dを生成しました。回転して形状を確認できます。");
+      get("imageObj").disabled=false;get("imageUnfold").disabled=false;draw();note("3Dを生成しました。回転して形状を確認できます。モデルはこの画面のメモリにのみ保持します。");
     }catch(error){if(request===version)note(error.message);}
     finally{generating=false;controls();}
   });

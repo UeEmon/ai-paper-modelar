@@ -75,3 +75,18 @@ test('local models, optional keys, endpoints and vision survive encryption indep
   await assert.rejects(v.save('ollama','test','',{endpoint:'http://user:secret@localhost:11434'}));
   await assert.rejects(v.save('ollama','test','',{endpoint:'file:///tmp/test'}));
 });
+test('3D provider credentials stay encrypted and independent from simple AI settings',async()=>{
+ const s=new Storage(),v=new AIVault(s,webcrypto);
+ const alice=await v.create('3D user','three-d-passphrase');
+ await v.save('openai','gpt-4.1-mini','test-text-key');
+ await v.save3D('meshy','meshy-t2.5','test-meshy-key');
+ await v.save3D('tripo','P1-20260311','test-tripo-key');
+ await v.save3D('huggingface','TRELLIS.2','');
+ assert.equal(v.headers()['X-AI-Key'],'test-text-key');
+ assert.equal(v.headers3D()['X-3D-Provider'],'huggingface');
+ for(const key of ['test-text-key','test-meshy-key','test-tripo-key'])assert.ok(!JSON.stringify([...s.map]).includes(key));
+ v.lock();assert.deepEqual(v.headers3D(),{});
+ await v.unlock(alice,'three-d-passphrase');
+ await v.save3D('meshy','meshy-6','');assert.equal(v.headers3D()['X-3D-Key'],'test-meshy-key');
+ await v.create('Other','other-passphrase');assert.deepEqual(v.headers3D(),{});
+});
