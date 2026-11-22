@@ -68,3 +68,5 @@ main{display:block;margin-top:26px}
 .tabPanel:focus-visible{outline:2px solid #558f80;outline-offset:5px;border-radius:12px}
 
 .referenceChoice{display:flex!important;align-items:center;gap:6px;margin-top:0!important}.referenceChoice input{width:18px;height:18px;padding:0}.proposal a,#appliedDesign a{display:block;margin-top:6px;overflow-wrap:anywhere;color:#166e57}.draftDimensions{font-weight:700}#researchState{padding:10px;background:#eef4ef;border-radius:8px}#appliedDesign{white-space:normal}#appliedDesign p{font-weight:400;font-size:12px}
+
+.modelPicker{display:flex;align-items:stretch;gap:8px}.modelPicker select{flex:1;min-width:0}.modelPicker button{flex-shrink:0}.modelPicker option{white-space:normal}@media(max-width:480px){.modelPicker{flex-direction:column}}
