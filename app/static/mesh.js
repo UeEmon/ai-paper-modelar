@@ -150,9 +150,9 @@
   });
 
   window.meshWorkbench = {
-    loadFile: async (file) => {
+    loadFile: async (file, {saveOriginal=false}={}) => {
       window.paperTabs?.show("mesh",{focus:true});
-      byId("meshSaveOriginal").checked = false; // Original is already in the project.
+      byId("meshSaveOriginal").checked = saveOriginal;
       await generate(file);
       if(!byId("meshViewer").hidden)byId("meshViewer").scrollIntoView({behavior:"smooth",block:"nearest"});
     }
