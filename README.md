@@ -130,6 +130,14 @@ LLMを自分で起動し、使用するモデルを読み込んでから、生�
 
 API実装の参照: [OpenAI Responses](https://developers.openai.com/api/reference/resources/responses/methods/create)、[Gemini generateContent](https://aistudio.google.com/api-reference/generate-content)、[Anthropic Messages](https://platform.claude.com/docs/en/api/messages)。
 
+### Docker版でOllamaへ接続できない・一覧を取得できない場合
+
+Docker内の `localhost` はコンテナ自身です。Mac/Windows等のホストPC上で動くOllamaへは、アプリ側の接続先として `http://host.docker.internal:11434` を使います。AI設定の「標準の接続先へ戻す」で、実行環境に合う接続先へ戻せます。モデルIDやAPIキーは変更せず、一覧を取得して接続確認後に保存してください。
+
+標準Dockerイメージでは、既定の許可リストを使用している場合に限り、保存済みの `localhost` / `127.0.0.1` / `[::1]` の標準接続先も `host.docker.internal` として解決します。そのため、以前のブラウザ設定でも一覧取得とAI呼び出しを継続できます。モデル一覧・接続テストの応答で実際の接続先を返し、画面にも反映します。通常のPC上で直接起動する場合は `localhost` のままです。
+
+`PAPER_MODELAR_LOCAL_AI_URLS` を明示している環境では、URLを文字どおり扱い、この自動変換は行いません。コンテナ内でLLMを動かす等の独自構成は、意図したURLを明示して利用してください。許可外の接続先へ自動再試行したり、Ollamaの待受範囲を変更したりすることはありません。
+
 ## 検索画像から簡易3Dモデルを作る
 
 1. 「AI設定」で画像に対応するOpenAI/Gemini/Anthropic、またはローカルの画像対応モデルを選んで保存します。ローカルAIでは「画像対応モデルとして資料画像を送信する」も有効にしてください。接続テストは短いテキスト生成なので、画像対応自体の保証はしません。

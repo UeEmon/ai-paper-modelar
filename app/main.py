@@ -11,7 +11,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
 
-from .ai import ProposalRequest, proposals, credentials_from_headers, check_connection, available_models
+from .ai import ProposalRequest, proposals, credentials_from_headers, check_connection, available_models, local_defaults
 from .generator import ModelSpec, render_pdf, render_svg, summary
 from .research import research
 from .senrolab import router as senrolab_router
@@ -93,6 +93,11 @@ async def plan(req: ProposalRequest, request: Request):
         raise HTTPException(status_code=404, detail=str(exc.args[0])) from exc
     except LibraryProblem as exc:
         raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
+
+@app.get("/api/ai/local-config")
+def local_ai_config():
+    return JSONResponse(local_defaults(), headers={"Cache-Control": "no-store"})
+
 
 @app.post("/api/ai/test")
 async def test_ai_connection(request: Request):
