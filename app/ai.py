@@ -13,7 +13,8 @@ from .projects import get_asset_for_ai
 
 class ProposalRequest(BaseModel):
     place: str = Field(min_length=2, max_length=120)
-    scale: int = Field(default=150, ge=20, le=500)
+    scale: int = Field(default=150, ge=1, le=500)
+    subject_type: Literal["architecture", "vehicle", "landscape", "prop", "character", "original", "other"] = "architecture"
     style: Literal["faithful", "standard", "anime", "retro", "easy"] = "standard"
     sources: list[dict] = Field(default_factory=list, max_length=8)
     upload_ids: list[str] = Field(default_factory=list, max_length=8)
@@ -27,11 +28,11 @@ LABELS = {
     "anime": "アニメ風", "retro": "昭和レトロ風", "easy": "簡単組立"
 }
 NOTES = {
-    "faithful": "立面や屋根・窓配置の忠実な再現を目指し、実寸と資料の確認後に設計します。",
-    "standard": "特徴的な外観を残し、細部を印刷テクスチャにします。",
+    "faithful": "資料を参照し、形状・色・特徴をできるだけ忠実に再現する構成を提案します。",
+    "standard": "題材の特徴を残し、細部を印刷表現と単純なパーツに置き換えます。",
     "anime": "輪郭と配色を強調した背景美術風にまとめます。",
     "retro": "経年感のある色・看板・木目を追加し、演出箇所を明示します。",
-    "easy": "壁4面と屋根で組み立てられる簡易構成にします。"
+    "easy": "部品数と工作工程を減らし、無理なく組み立てられる構成を検討します。"
 }
 
 
@@ -87,7 +88,13 @@ async def proposals(req: ProposalRequest):
         "Respond only with a JSON object with keys proposals (array of 3 objects: "
         "style, title, description) and notes (array of strings), in Japanese. "
         "style must be faithful, standard, anime, retro, or easy. "
-        "Recommend railway paper-craft designs and fabrication trade-offs. "
+        "Recommend papercraft designs for the supplied subject category, including "
+        "architecture, vehicles, scenery, props, characters or original concepts. "
+        "Railway dioramas are only one possible application, not a requirement. "
+        "Consider printable geometry, joints, level of detail and scale. "
+        "The available deterministic cutting template engine only supports "
+        "simple building and cuboid nets; do not claim that arbitrary shapes "
+        "can already be unfolded or made from AI images. "
         "You may analyze attached reference images if present; a PDF reference is "
         "represented by only a rendered FIRST PAGE plus extracted text where available. "
         "Distinguish visible observations, source metadata, and guesses. "
@@ -97,7 +104,8 @@ async def proposals(req: ProposalRequest):
         "explicit verified measurements are provided."
     )
     prompt = json.dumps({
-        "place": req.place,
+        "subject_name": req.place,
+        "subject_type": req.subject_type,
         "scale": req.scale,
         "preferred_style": req.style,
         "online_source_metadata": req.sources[:8],
