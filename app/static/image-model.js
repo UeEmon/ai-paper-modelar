@@ -1,7 +1,7 @@
 "use strict";
 (() => {
   const get=id=>document.getElementById(id);
-  let selected=null,model=null,version=0,searchVersion=0,yaw=-0.55,pitch=-0.25,zoom=1,drag=null,generating=false;
+  let referenceContext=null,selected=null,model=null,version=0,searchVersion=0,yaw=-0.55,pitch=-0.25,zoom=1,drag=null,generating=false;
   const canvas=get("imageCanvas"),ctx=canvas.getContext("2d");
   const note=text=>{get("imageMessage").textContent=text;};
   const add=(parent,tag,value)=>{const item=document.createElement(tag);item.textContent=value;parent.appendChild(item);return item;};
@@ -57,7 +57,7 @@
   get("imageConsent").addEventListener("change",()=>{version++;controls();});
   get("imageHeight").addEventListener("input",()=>{version++;clearModel();controls();note("高さを変更しました。もう一度3Dを生成してください。");});
   function resetSearch(){
-    searchVersion++;version++;selected=null;get("imageSearch").disabled=false;
+    searchVersion++;version++;referenceContext=null;selected=null;get("imageSearch").disabled=false;
     get("imageConsent").checked=false;get("imageCandidates").replaceChildren();clearModel();controls();note("検索語を変更しました。画像検索を押してください。");
   }
   get("imageQuery").addEventListener("input",resetSearch);
@@ -91,7 +91,7 @@
     if(!headers[external()?"X-3D-Provider":"X-AI-Provider"]){note("AI設定でプロファイルを解除し、「3D生成AI」の使用する方式の設定を保存してください。");return;}
     generating=true;get("imageGenerate").disabled=true;clearModel();note(external()?"外部3D生成APIへ依頼しています。待ち行列を含め数分かかります。この画面でお待ちください。":"画像をAIで読み取り、簡易3Dモデルを生成しています…");
     try{
-      const response=await fetch(external()?"/api/3d/generate":"/api/image-model/generate",{method:"POST",headers:{"Content-Type":"application/json",...headers},cache:"no-store",redirect:"error",body:JSON.stringify({image_id:image.id,name:(get("imageQuery").value.trim()||get("place").value.trim()||"画像からの模型").slice(0,80),height_mm:Number(get("imageHeight").value),consent:true,cost_consent:external()&&get("externalCostConsent").checked})});
+      const response=await fetch(external()?"/api/3d/generate":"/api/image-model/generate",{method:"POST",headers:{"Content-Type":"application/json",...headers},cache:"no-store",redirect:"error",body:JSON.stringify({image_id:image.id,name:(get("imageQuery").value.trim()||get("place").value.trim()||"画像からの模型").slice(0,80),height_mm:Number(get("imageHeight").value),subject_type:referenceContext?.genre||get("subjectType").value,reference_type:referenceContext?.reference_type||"image",consent:true,cost_consent:external()&&get("externalCostConsent").checked})});
       const data=await response.json();if(request!==version)return;if(!response.ok)throw Error(typeof data.detail==="string"?data.detail:"3D生成に失敗しました。");
       if(JSON.stringify(headers)!==JSON.stringify(currentHeaders())){note("AI設定が変わったため、生成結果を破棄しました。");return;}
       displayModel(data);note(data.saved_model?"3Dを生成し、サーバーに保存しました。保存済みモデルの一覧から再度開けます。":"3Dを生成しました。サーバーへの保存を確認できません。手元にOBJを保存してください。");
@@ -105,7 +105,20 @@
     for(const text of [...data.warnings,...data.notes])add(get("imageModelInfo"),"p",text);
     get("imageObj").disabled=false;get("imageUnfold").disabled=false;draw();
   }
-  window.imageWorkbench={async openSaved(url){
+  window.imageWorkbench={prepareReference(image,context){
+    get("imageQuery").value=context.word;get("imageHeight").value=String(context.height_mm);
+    get("imageMethod").value=context.method;get("imageMethod").dispatchEvent(new Event("change"));
+    selected=image;referenceContext={...context,origin:"idea"};version++;
+    get("imageConsent").checked=false;get("externalCostConsent").checked=false;clearModel();controls();
+    const area=get("imageCandidates");area.replaceChildren();const card=add(area,"div","");card.className="imageCandidate";
+    const img=document.createElement("img");img.src=image.preview_url;img.alt=image.title;card.append(img);
+    add(card,"strong",image.title);const link=add(card,"a","出典・利用条件を確認");link.href=image.source_url;link.target="_blank";link.rel="noopener noreferrer";
+    add(card,"small",(image.author||"作者は出典を確認")+" / "+image.license);
+    img.addEventListener("error",()=>{if(selected?.id===image.id){selected=null;version++;controls();note("選択資料を取得できません。資料を選び直してください。");}});
+    window.paperTabs?.show("image3d",{focus:true});note((context.reference_type==="diagram"?"構造図候補":"参考画像")+"を選択しました。出典と画像送信を確認し、3Dを生成してください。生成後、このモデルから展開図を作ります。");
+  },invalidateIdea(){
+    if(referenceContext?.origin==="idea"){referenceContext=null;selected=null;version++;get("imageConsent").checked=false;get("externalCostConsent").checked=false;clearModel();controls();}
+  },async openSaved(url){
     const request=++version;window.paperTabs?.show("image3d",{focus:true});
     const response=await fetch(url,{cache:"no-store"});const data=await response.json();
     if(request!==version)return;

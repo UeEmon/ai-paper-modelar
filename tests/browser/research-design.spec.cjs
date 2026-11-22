@@ -6,7 +6,7 @@ const references=[
 const design={template:'cone',width_m:4,depth_m:4,height_m:16,top_ratio:0.65,roof:'flat',pitch_deg:0,overhang_m:0,sides:6};
 const result=title=>({provider:'ollama',notes:[],proposals:[{title,style:'retro',description:'円形の塔を円すい台で表現します。',design,design_basis:'選択資料にある円形の塔を参考にした簡略形状。寸法は推定です。',source_indices:[1],dimensions_estimated:true}]});
 async function search(page){
-  await page.locator('#place').fill('海辺の灯台');await page.locator('#search').click();
+  await page.locator('#place').fill('海辺の灯台');await page.locator('#textSearch').click();
   await expect(page.locator('#researchState')).toContainText('1件をAIに使用');
 }
 test('selected search references become editable AI geometry and change the generated net',async({page})=>{
@@ -41,7 +41,7 @@ test('changing subject or failed search never sends previous references',async({
   await page.goto('/');await search(page);
   await page.locator('#place').fill('別の題材');await expect(page.locator('#research .reference')).toHaveCount(0);
   await page.locator('#plan').click();await expect.poll(()=>sent.length).toBe(1);expect(sent[0].sources).toEqual([]);
-  await search(page);fail=true;await page.locator('#search').click();await expect(page.locator('#researchState')).toContainText('検索できませんでした');
+  await search(page);fail=true;await page.locator('#textSearch').click();await expect(page.locator('#researchState')).toContainText('検索できませんでした');
   await page.locator('#plan').click();await expect.poll(()=>sent.length).toBe(2);expect(sent[1].sources).toEqual([]);
 });
 test('late proposals from an old subject cannot overwrite a new proposal',async({page})=>{

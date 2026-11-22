@@ -53,6 +53,7 @@ jobs:
           node --check app/static/image-model.js
           node --check app/static/outputs.js
           node --check app/static/public-models.js
+          node --check app/static/idea-workflow.js
           node --check app/static/ai-vault.js
           node --check app/static/ai-settings.js
           node --check app/static/simple-3d-settings.js

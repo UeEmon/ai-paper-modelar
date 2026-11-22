@@ -4,7 +4,7 @@ test('non-Wikipedia references display domain and search origin and reach AI wit
   let query,sent;
   await page.route('**/api/research?*',r=>{query=new URL(r.request().url()).searchParams;return r.fulfill({json:{results:refs,note:'抜粋のみ。',warnings:[]}});});
   await page.route('**/api/proposals',r=>{sent=r.request().postDataJSON();return r.fulfill({json:{provider:'ollama',proposals:[],notes:[]}});});
-  await page.goto('/');await page.locator('#place').fill('灯台');await page.locator('#search').click();
+  await page.goto('/');await page.locator('#place').fill('灯台');await page.locator('#textSearch').click();
   await expect(page.locator('#research .reference')).toHaveCount(2);
   expect(query.get('scope')).toBe('all');
   await expect(page.locator('#research')).toContainText('museum.example.org');await expect(page.locator('#research')).toContainText('Web検索');
@@ -15,13 +15,13 @@ test('non-Wikipedia references display domain and search origin and reach AI wit
 test('scope changes clear old references and partial failures are explained',async({page})=>{
   const queries=[];
   await page.route('**/api/research?*',r=>{queries.push(new URL(r.request().url()).searchParams.get('scope'));return r.fulfill({json:{results:refs,note:'抜粋のみ。',warnings:['Web検索の一部を利用できませんでした。']}});});
-  await page.goto('/');await page.locator('#search').click();await expect(page.locator('#research .reference')).toHaveCount(2);
+  await page.goto('/');await page.locator('#textSearch').click();await expect(page.locator('#research .reference')).toHaveCount(2);
   await expect(page.locator('#research')).toContainText('一部を利用できません');
   await page.locator('#researchScope').selectOption('wikipedia');await expect(page.locator('#research .reference')).toHaveCount(0);
-  await page.locator('#search').click();await expect.poll(()=>queries.length).toBe(2);expect(queries).toEqual(['all','wikipedia']);
+  await page.locator('#textSearch').click();await expect.poll(()=>queries.length).toBe(2);expect(queries).toEqual(['all','wikipedia']);
 });
 test('unrelated first candidates are not automatically selected',async({page})=>{
   await page.route('**/api/research?*',r=>r.fulfill({json:{results:[{...refs[0],query_match:false}],note:'抜粋のみ。'}}));
-  await page.goto('/');await page.locator('#search').click();await expect(page.locator('#researchState')).toContainText('0件をAIに使用');
+  await page.goto('/');await page.locator('#textSearch').click();await expect(page.locator('#researchState')).toContainText('0件をAIに使用');
   await expect(page.locator('#research .reference input')).not.toBeChecked();
 });

@@ -64,8 +64,9 @@ def test_consented_vision_produces_obj_and_existing_mesh_engine_can_unfold(monke
     monkeypatch.setattr(ai.httpx,'AsyncClient',lambda **kw:HTTP_CLIENT(transport=httpx.MockTransport(handler),**kw))
     headers={'X-AI-Provider':provider,'X-AI-Model':'vision-model','X-AI-Key':'test-vision-key'}
     if provider in ai.LOCAL_PROVIDERS:headers|={'X-AI-Endpoint':'http://localhost:11434' if provider=='ollama' else 'http://localhost:1234/v1','X-AI-Vision':'true'}
-    r=client.post('/api/image-model/generate',json={'image_id':image_id,'name':'画像の建物','height_mm':100,'consent':True},headers=headers)
+    r=client.post('/api/image-model/generate',json={'image_id':image_id,'name':'画像の建物','height_mm':100,'consent':True,'subject_type':'architecture','reference_type':'diagram'},headers=headers)
     assert r.status_code==200,r.text
+    assert 'architecture' in sent[0].content.decode() and 'diagram' in sent[0].content.decode()
     data=r.json();assert client.get(data['saved_model']['obj_url']).content==data['obj'].encode()
     assert data['saved_model']['glb_url'] is None
     assert data['estimated'] is True and len(data['components'])==2 and data['size_mm'][1]==100
