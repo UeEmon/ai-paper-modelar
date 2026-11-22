@@ -1,5 +1,6 @@
 """HTTP entrypoint for AI Paper Modelar."""
 from pathlib import Path
+from typing import Literal
 
 import httpx
 from fastapi import FastAPI, File, Form, HTTPException, Query, Request, UploadFile
@@ -71,9 +72,10 @@ def health():
     return {"status": "ok"}
 
 @app.get("/api/research")
-async def find(q: str = Query(min_length=2, max_length=120)):
+async def find(q: str = Query(min_length=2, max_length=120),
+               scope: Literal["all", "web", "wikipedia"] = "all"):
     try:
-        return await research(q)
+        return await research(q, scope)
     except (httpx.HTTPError, ValueError) as exc:
         raise HTTPException(status_code=503, detail="公開資料を取得できませんでした") from exc
 

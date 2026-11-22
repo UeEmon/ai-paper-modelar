@@ -27,9 +27,10 @@
 <option value="railway">鉄道模型・ジオラマ</option>
 <option value="other">その他</option>
 </select>
+<label for="researchScope">資料検索の範囲</label><select id="researchScope"><option value="all">Web＋Wikipedia（広く探す）</option><option value="web">Webのみ（公式サイト・一般ページ等）</option><option value="wikipedia">Wikipediaのみ</option></select>
 <label for="place">対象の名称・アイデア</label>
 <div class="inline"><input id="place" value="小さな洋館" placeholder="例：灯台、バス、城、動物、創作の建物" maxlength="120"><button id="search" class="secondary">資料検索</button></div>
-<p class="muted">名称からWikipediaの公開情報を探します。独自のデザインは資料なしで制作可能です。出典・写真や設計図の権利は別途確認してください。</p>
+<p class="muted">入力語をBingのWeb検索とWikipediaへ送信し、公開情報を探します。使いたい資料を選んでAI提案に渡せます。リンク先本文・画像の取得や、実寸・利用権の確認は自動では行いません。</p>
 <p id="researchState" class="muted" role="status">資料未選択。検索後、AIで使う資料を選んでください。</p>
 <div id="research" aria-live="polite"></div>
 <div class="sectionhead"><span class="eyebrow">参考資料</span></div>
