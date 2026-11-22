@@ -66,7 +66,9 @@ def test_consented_vision_produces_obj_and_existing_mesh_engine_can_unfold(monke
     if provider in ai.LOCAL_PROVIDERS:headers|={'X-AI-Endpoint':'http://localhost:11434' if provider=='ollama' else 'http://localhost:1234/v1','X-AI-Vision':'true'}
     r=client.post('/api/image-model/generate',json={'image_id':image_id,'name':'画像の建物','height_mm':100,'consent':True},headers=headers)
     assert r.status_code==200,r.text
-    data=r.json();assert data['estimated'] is True and len(data['components'])==2 and data['size_mm'][1]==100
+    data=r.json();assert client.get(data['saved_model']['obj_url']).content==data['obj'].encode()
+    assert data['saved_model']['glb_url'] is None
+    assert data['estimated'] is True and len(data['components'])==2 and data['size_mm'][1]==100
     assert 'test-vision-key' not in r.text
     assert 'commons.wikimedia.org' in data['obj'] and 'CC BY-SA' in data['obj']
     mesh=load_mesh(data['obj'].encode(),'generated.obj')

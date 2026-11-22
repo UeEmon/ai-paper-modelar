@@ -28,7 +28,7 @@ def test_read_only_connection_checks_never_generate(monkeypatch,provider):
     assert 'test-only-key' not in str(calls[0].url) and 'test-only-key' not in r.text
 
 @pytest.mark.parametrize('provider',['meshy','tripo'])
-def test_paid_generation_created_once_and_mesh_returns_only_to_browser(monkeypatch,provider,tmp_path):
+def test_paid_generation_created_once_and_generated_meshes_are_saved(monkeypatch,provider,tmp_path):
     calls=[];glb=trimesh.creation.box().export(file_type='glb')
     async def preview(item):return b'safe-jpeg'
     monkeypatch.setattr(image_models,'choice',lambda _:type('Choice',(),{'metadata':{'title':'source'}})())
@@ -47,7 +47,14 @@ def test_paid_generation_created_once_and_mesh_returns_only_to_browser(monkeypat
     d=r.json();assert len(d['faces'])==12 and d['size_mm'][1]==100
     assert 'test-only-key' not in r.text
     assert len([r for r in calls if r.method=='POST' and not r.url.path.endswith('/files')])==1
-    assert not list(tmp_path.rglob('*'))
+    saved=d['saved_model']
+    assert client.get(saved['obj_url']).content==d['obj'].encode()
+    assert client.get(saved['glb_url']).content==glb
+    for path in tmp_path.rglob('*'):
+        if path.is_file():
+            assert b'test-only-key' not in path.read_bytes() and b'safe-jpeg' not in path.read_bytes()
+    metadata=json.loads(next(tmp_path.rglob('metadata.json')).read_text())
+    assert 'source' not in metadata and 'prompt' not in metadata
     body=json.loads(next(r for r in calls if r.method=='POST' and not r.url.path.endswith('/files')).content)
     assert (body['should_texture'] if provider=='meshy' else body['texture']) is False
     if provider=='tripo':assert 'quad' not in body # v2.5 does not accept this parameter, even false

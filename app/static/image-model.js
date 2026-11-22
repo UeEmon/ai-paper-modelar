@@ -94,13 +94,24 @@
       const response=await fetch(external()?"/api/3d/generate":"/api/image-model/generate",{method:"POST",headers:{"Content-Type":"application/json",...headers},cache:"no-store",redirect:"error",body:JSON.stringify({image_id:image.id,name:(get("imageQuery").value.trim()||get("place").value.trim()||"画像からの模型").slice(0,80),height_mm:Number(get("imageHeight").value),consent:true,cost_consent:external()&&get("externalCostConsent").checked})});
       const data=await response.json();if(request!==version)return;if(!response.ok)throw Error(typeof data.detail==="string"?data.detail:"3D生成に失敗しました。");
       if(JSON.stringify(headers)!==JSON.stringify(currentHeaders())){note("AI設定が変わったため、生成結果を破棄しました。");return;}
-      model=data;get("imagePlaceholder").hidden=true;get("imageModelInfo").hidden=false;get("imageModelInfo").replaceChildren();
-      add(get("imageModelInfo"),"strong",(data.components.length?data.components.length+"部品":data.provider+" 生成メッシュ")+" / "+data.faces.length+"三角形 / 幅×高さ×奥行 "+data.size_mm.join(" × ")+" mm");
-      for(const text of [...data.warnings,...data.notes])add(get("imageModelInfo"),"p",text);
-      get("imageObj").disabled=false;get("imageUnfold").disabled=false;draw();note("3Dを生成しました。回転して形状を確認できます。モデルはこの画面のメモリにのみ保持します。");
+      displayModel(data);note(data.saved_model?"3Dを生成し、サーバーに保存しました。保存済みモデルの一覧から再度開けます。":"3Dを生成しました。サーバーへの保存を確認できません。手元にOBJを保存してください。");
+      if(data.saved_model)window.dispatchEvent(new Event("paper-generated-model-saved"));
     }catch(error){if(request===version)note(error.message);}
     finally{generating=false;controls();}
   });
+  function displayModel(data){
+    model=data;get("imagePlaceholder").hidden=true;get("imageModelInfo").hidden=false;get("imageModelInfo").replaceChildren();
+    add(get("imageModelInfo"),"strong",(data.components.length?data.components.length+"部品":data.provider+" 生成メッシュ")+" / "+data.faces.length+"三角形 / 幅×高さ×奥行 "+data.size_mm.join(" × ")+" mm");
+    for(const text of [...data.warnings,...data.notes])add(get("imageModelInfo"),"p",text);
+    get("imageObj").disabled=false;get("imageUnfold").disabled=false;draw();
+  }
+  window.imageWorkbench={async openSaved(url){
+    const request=++version;window.paperTabs?.show("image3d",{focus:true});
+    const response=await fetch(url,{cache:"no-store"});const data=await response.json();
+    if(request!==version)return;
+    if(!response.ok)throw Error(data.detail||"保存済みモデルを開けません。");
+    displayModel(data);note("サーバーに保存した3Dモデルを開きました。OBJ保存や展開図の作成ができます。");
+  }};
   function file(){return new File([model.obj],model.name.replace(/[\\/:*?"<>|]/g,"_").slice(0,60)+".obj",{type:"text/plain"});}
   get("imageObj").addEventListener("click",()=>{if(model)save(file(),file().name);});
   get("imageUnfold").addEventListener("click",async()=>{

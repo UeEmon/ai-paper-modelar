@@ -33,6 +33,8 @@ app.include_router(project_router)
 app.include_router(image_model_router)
 from .external_3d import router as external_3d_router
 app.include_router(external_3d_router)
+from .generated_models import router as generated_model_router
+app.include_router(generated_model_router)
 
 
 @app.middleware("http")
