@@ -28,9 +28,9 @@ For n equal sides and circumradius r, edge length is `2*r*sin(π/n)` and apothem
 1. Pydantic validates scale, dimensions, template, ratio and polygon edge count.
 2. Template-specific pure geometry creates cut outline polygons and separate score/fold line primitives.
 3. A part bounding-box pass normalizes all coordinates to positive millimetres with a six millimetre margin.
-4. Existing `page_jobs` estimates the total page count *before* allocating tiled page descriptors; >100 pages returns a user-facing validation error.
-5. Existing ReportLab and SVG rendering use the same underlying part coordinates. Oversized parts are tiled with five millimetre overlap.
-6. The 50 mm reference stroke on each A4 page must be checked with a ruler after printing at 100% (never print 'fit to page').
+4. `page_jobs` uses a rectangular shelf-packing algorithm for small independent parts. Large parts are tiled with 5 mm overlap. It checks the required tile count *before* creating page descriptors; >100 pages is rejected.
+5. ReportLab and SVG renderers consume the exact same page-placement descriptors and crop windows; multiple parts can share one A4 page without overlapping.
+6. Each SVG graphic includes a `data-layer` tag (`cut`, `fold`, or `detail`) for post-processing. The 50 mm reference stroke on each A4 page must be checked with a ruler after printing at 100% (never print 'fit to page').
 
 ## Paper assembly conventions
 
@@ -38,7 +38,7 @@ For n equal sides and circumradius r, edge length is `2*r*sin(π/n)` and apothem
 - The polygon/cylinder side is unrolled as one continuous strip with a side seam tab and a series of small cap-attachment tabs.
 - The cone side uses a seam tab. Its end caps and pyramid base have perimeter tabs to attach the side material.
 - The pyramid has separate triangles with one side seam tab each.
-- The side/surface parts are not automatically arranged into a single connected overlap-free net for arbitrary polyhedra. Large parts are divided across pages.
+- Small finished parts are packed efficiently, but the engine does not unfold arbitrary polyhedral meshes into one overlap-free connected net. Large parts are tiled across pages.
 - Printing can distort scale. Material thickness, kerf, grain direction, folded-edge correction, and mechanical stability are not compensated. Always prototype first.
 
 ## Compatibility
