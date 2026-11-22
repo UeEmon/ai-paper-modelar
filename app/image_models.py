@@ -160,7 +160,9 @@ async def generate_model(req: ModelRequest, request: Request):
     # Attribution accompanies downloaded geometry; no credentials are retained.
     attribution=["# Reference: "+item.metadata["source_url"],"# Author: "+item.metadata["author"],"# Image license: "+item.metadata["license"]]
     result["obj"]="\n".join(attribution)+"\n"+result["obj"]
-    return {**result,"name":req.name,"provider":credentials.provider,"source":item.metadata,
+    from .generated_models import save_model
+    saved = save_model(result, name=clean(req.name), provider=credentials.provider)
+    return {**result,"saved_model":saved,"name":clean(req.name),"provider":credentials.provider,"source":item.metadata,
             "components":[{**part.model_dump(),"name":clean(part.name)} for part in scene.components],
             "notes":[clean(note) for note in scene.notes],
             "warnings":["単一画像からAIが推定した簡易3Dです。裏面・寸法・接合は未検証です。",

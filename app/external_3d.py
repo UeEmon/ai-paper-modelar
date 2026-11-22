@@ -206,6 +206,9 @@ async def create(req:GenerateRequest,request:Request):
         async with asyncio.timeout(600),httpx.AsyncClient(timeout=120,follow_redirects=False,trust_env=False) as c:
             data=await generate(c,provider,model,key,jpeg)
         result=await run_in_threadpool(mesh_result,data,req.height_mm)
-        return {**result,'name':req.name,'provider':provider,'source':item.metadata}
+        from .generated_models import save_model
+        name=req.name.replace(key,'[redacted]') if key else req.name
+        saved=await run_in_threadpool(save_model,result,name=name,provider=provider,glb=data)
+        return {**result,'saved_model':saved,'name':name,'provider':provider,'source':item.metadata}
     except (httpx.HTTPError,ValueError,KeyError,TypeError,IndexError,TimeoutError,RuntimeError,OSError):
         raise HTTPException(502,'3D生成に失敗しました。利用枠・残高・モデル対応・稼働状況を確認してください。課金済みの可能性があるため、提供元の履歴を確認してから再実行してください。') from None

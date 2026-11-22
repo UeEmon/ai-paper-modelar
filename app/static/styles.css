@@ -75,3 +75,5 @@ main{display:block;margin-top:26px}
 /* Explicit component display rules must respect the HTML hidden state. */
 [hidden]{display:none!important}
 #outputList p{overflow-wrap:anywhere;display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+.savedGeneratedModel{padding:14px 0;border-bottom:1px solid #dce4dd;overflow-wrap:anywhere}
+.savedGeneratedModel .projectButtons{align-items:center}

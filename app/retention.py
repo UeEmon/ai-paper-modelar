@@ -1,4 +1,4 @@
-"""Only rendered SVG/PDF outputs may be persisted by the application."""
+"""Persist rendered SVG/PDF and generated models; references remain temporary."""
 import asyncio
 import hashlib
 import os

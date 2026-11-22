@@ -51,7 +51,7 @@
 <div id="uploaded" class="uploadlist" aria-live="polite"></div>
 <p class="muted">参考資料は処理中のメモリだけで扱い、ディスクには保存しません。一時資料は15分で失効し、作業中の資料は操作終了から15分で失効します。</p>
 <div class="sectionhead"><span class="eyebrow">保存済みの資料</span></div>
-<p class="muted">資料の原本・検索結果・中間3Dは永続保存しません。</p>
+<p class="muted">資料の原本・検索結果は永続保存しません。生成した3Dモデルは保存します。</p>
 <div class="inline copyControl"><label for="copyDestination">資料の複製先</label><select id="copyDestination"><option value="">複製先を選択</option></select></div>
 <div id="storedAssets" class="uploadlist" aria-live="polite"></div>
 <label class="aiConsent"><input type="checkbox" id="allowAiUploads">
@@ -66,7 +66,7 @@
 </div>
 <div id="proposals" aria-live="polite"></div>
 <div class="nextStep"><p>デザインが決まったら、基本形状と寸法を指定します。</p><button type="button" data-open-tab="shape">基本形状の展開図へ進む →</button></div></section>
-<aside class="workflowGuide"><h3>作り方を選ぶ</h3><p>資料やAIでアイデアを考えたいときは、このタブを使います。AIは資料を参考に、スタイル・基本形状・推定寸法を提案します。</p><button type="button" class="secondary" data-open-tab="settings">使うAIを設定</button><h3>寸法がわかっている</h3><p>箱・建物・円柱などの形から、寸法を指定して直接作れます。</p><button type="button" class="secondary" data-open-tab="shape">基本形状から作る</button><h3>3Dモデルを持っている</h3><p>OBJ・STLファイルから展開図を作れます。</p><button type="button" class="secondary" data-open-tab="mesh">3Dモデルを開く</button><h3>画像から立体を考えたい</h3><p>検索画像の特徴をもとに、AIで基本立体を組み合わせた簡易3Dを作れます。</p><button type="button" class="secondary" data-open-tab="image3d">画像から3Dを作る</button><h3>作業を保存したい</h3><p>完成した展開図だけをサーバーに保存できます。プロジェクトは一時的な作業用です。</p><button type="button" class="secondary" data-open-tab="projects">プロジェクトを管理</button></aside></div></section>
+<aside class="workflowGuide"><h3>作り方を選ぶ</h3><p>資料やAIでアイデアを考えたいときは、このタブを使います。AIは資料を参考に、スタイル・基本形状・推定寸法を提案します。</p><button type="button" class="secondary" data-open-tab="settings">使うAIを設定</button><h3>寸法がわかっている</h3><p>箱・建物・円柱などの形から、寸法を指定して直接作れます。</p><button type="button" class="secondary" data-open-tab="shape">基本形状から作る</button><h3>3Dモデルを持っている</h3><p>OBJ・STLファイルから展開図を作れます。</p><button type="button" class="secondary" data-open-tab="mesh">3Dモデルを開く</button><h3>画像から立体を考えたい</h3><p>検索画像の特徴をもとに、AIで基本立体を組み合わせた簡易3Dを作れます。</p><button type="button" class="secondary" data-open-tab="image3d">画像から3Dを作る</button><h3>作業を保存したい</h3><p>生成した3Dモデルと完成した展開図をサーバーに保存できます。プロジェクトは一時的な作業用です。</p><button type="button" class="secondary" data-open-tab="projects">プロジェクトを管理</button></aside></div></section>
 <section id="panel-shape" class="tabPanel" role="tabpanel" aria-labelledby="tab-shape" tabindex="0" hidden><div class="shapeLayout"><section class="controls"><p class="eyebrow">BASIC SHAPES</p><h2>寸法から展開図を作る</h2>
 <p class="lead">基本形状・縮尺・寸法を指定して生成します。AI設定や資料の登録は不要です。</p>
 <div class="twocol">
@@ -170,7 +170,7 @@
 <button type="button" class="secondary imageSetup" data-open-tab="settings">画像対応AIを設定</button>
 <p id="imageMessage" role="status" aria-live="polite">画像を検索し、1枚選んでください。</p>
 </section><section class="workspace">
-<h2>3Dプレビュー</h2><div class="image3dViewer"><canvas id="imageCanvas" tabindex="0" role="img" aria-label="画像から推定した簡易3Dモデル。矢印キーまたはドラッグで回転、プラス・マイナスで拡大縮小"></canvas><p id="imagePlaceholder">生成したモデルをここで回して確認できます。</p></div>
+<h2>3Dプレビュー</h2><button type="button" class="secondary" data-open-tab="projects">保存済み3Dモデルを開く</button><div class="image3dViewer"><canvas id="imageCanvas" tabindex="0" role="img" aria-label="画像から推定した簡易3Dモデル。矢印キーまたはドラッグで回転、プラス・マイナスで拡大縮小"></canvas><p id="imagePlaceholder">生成したモデルをここで回して確認できます。</p></div>
 <div class="bar"><button id="imageResetView" type="button" class="secondary">視点をリセット</button><label for="imageZoom">拡大・縮小</label><input id="imageZoom" type="range" min="0.5" max="2.5" value="1" step="0.1"></div>
 <div id="imageModelInfo" class="result" hidden></div>
 <label class="meshCheck"><input id="imageSaveOriginal" type="checkbox">展開時に生成OBJを一時作業へ追加する（メモリのみ）</label>
@@ -179,7 +179,7 @@
 </section></div></section>
 <section id="panel-projects" class="tabPanel" role="tabpanel" aria-labelledby="tab-projects" tabindex="0" hidden><section class="projectEditor" aria-label="保存済み制作プロジェクト">
 <p class="eyebrow">PROJECT LIBRARY</p><h2>一時的な作業と完成した展開図</h2>
-<p class="muted">参考資料や模型設定はメモリのみです。操作終了から15分、またはサーバー再起動で消えます。後日開けるのは完成した展開図だけです。</p>
+<p class="muted">参考資料や模型設定はメモリのみです。操作終了から15分、またはサーバー再起動で消えます。後日開けるのは生成した3Dモデルと完成した展開図です。</p>
 <label for="projectSelect">一時作業</label>
 <select id="projectSelect"><option value="">未選択（一時的な作業）</option></select>
 <div class="twocol">
@@ -191,8 +191,9 @@
 <button id="saveProject" class="secondary" disabled>一時設定を更新</button>
 <button id="deleteProject" class="danger" disabled>削除</button>
 </div>
-<p class="muted">資料が必要な場合は手元に保管してください。サーバーには完成した展開図のみ残します。</p>
+<p class="muted">資料が必要な場合は手元に保管してください。サーバーには生成した3Dモデルと完成した展開図を残します。</p>
 </section>
+<section><h2>保存済みの生成3Dモデル</h2><p class="muted">簡易3D・外部APIで生成したモデルを自動保存します。外部APIの生成GLBも保持します。プレビューと展開は調整済みOBJを使います。参考画像・アップロードした原本は保存しません。</p><button id="refreshModels" type="button" class="secondary">3Dモデル一覧を更新</button><div id="generatedModelList" role="status"></div></section>
 <section><h2>保存済みの展開図</h2><button id="refreshOutputs" type="button" class="secondary">一覧を更新</button><div id="outputList" role="status"></div></section><p class="muted">選択したプロジェクトはすべてのタブで共通です。資料の追加・編集は「資料・AI提案」タブで行います。</p><button type="button" data-open-tab="design">資料・AI提案へ戻る</button></section>
 <section id="panel-settings" class="tabPanel" role="tabpanel" aria-labelledby="tab-settings" tabindex="0" hidden><section class="aiSettings">
 <div class="settingsHeading"><h2>生成AIの設定</h2><span id="aiState" class="status">ロック中 · 定型案を使用</span></div>
@@ -242,7 +243,7 @@
 <button id="threeUnlockGuide" type="button" class="secondary">プロファイルを作成・解除する</button>
 <fieldset id="threeCredentials" disabled><legend>キーと接続確認・保存</legend>
 <label for="threeKey">APIキー / HFトークン（空欄なら保存済みを使用）</label><input id="threeKey" type="password" autocomplete="off" maxlength="512">
-<p class="muted">HFはトークンなしでも試せますが、無料枠の上限と混雑があります。Meshy・Tripoは提供元の残高を使用します。接続テストでは生成・課金を行いません。画像は外部へ送信され、提供元の保管条件に従います。このアプリには資料・生成3D・キーを永続保存しません。</p>
+<p class="muted">HFはトークンなしでも試せますが、無料枠の上限と混雑があります。Meshy・Tripoは提供元の残高を使用します。接続テストでは生成・課金を行いません。画像は外部へ送信され、提供元の保管条件に従います。このアプリには生成3Dを保存します。参考資料・キーは永続保存しません。</p>
 <div class="projectButtons"><button id="threeTest" type="button" class="secondary">3D APIの接続テスト</button><button id="threeSave" type="button">接続を確認して3D設定を保存</button></div><p id="threeMessage" role="status"></p>
 </fieldset></fieldset></fieldset><p id="aiMessage" role="status" aria-live="polite"></p>
 </section></section>
@@ -254,7 +255,7 @@
 <script defer src="/static/ai-settings.js?v=separate-3d-2"></script>
 <script defer src="/static/app.js"></script>
 <script defer src="/static/projects.js"></script>
-<script defer src="/static/outputs.js"></script>
+<script defer src="/static/outputs.js?v=saved-models-1"></script>
 <script defer src="/static/mesh.js"></script>
-<script defer src="/static/image-model.js?v=separate-3d-2"></script>
+<script defer src="/static/image-model.js?v=saved-models-1"></script>
 </body></html>
