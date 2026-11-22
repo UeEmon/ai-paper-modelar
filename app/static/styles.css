@@ -46,3 +46,23 @@ button.danger{border:1px solid #be6d6a;color:#8c3330;background:white}
 .aiSettings{grid-column:1/-1;background:#fff;border:1px solid #ccc;border-radius:12px;padding:20px;margin-bottom:20px}.aiSettings summary{cursor:pointer;font-weight:bold}.aiSettings summary span{font-size:.85em;font-weight:normal;margin-left:16px}.aiSettings fieldset{border:1px solid #ddd;margin-top:12px;padding:12px;min-width:0}.aiSettings input,.aiSettings select{max-width:100%}
 
 .aiSettings .localVision{display:flex;align-items:center;gap:8px}.aiSettings .localVision input{width:18px;height:18px;flex-shrink:0}
+
+/* One workspace per tab; hidden panels retain their inputs and results. */
+[hidden]{display:none!important}
+main{display:block;margin-top:26px}
+.pageIntro{margin:0 0 22px}.pageIntro h1{font-size:29px;margin:7px 0}.pageIntro p:not(.eyebrow){color:#68776d;line-height:1.7;margin:8px 0}
+.appTabs{display:flex;gap:5px;overflow-x:auto;border-bottom:1px solid #cbd8ce;padding:0 0 8px;scrollbar-width:thin}
+.appTabs [role=tab]{flex-shrink:0;color:#53675b;background:transparent;border:1px solid transparent;border-radius:9px;padding:13px 22px;font-weight:700;font-size:14px;white-space:nowrap}
+.appTabs [role=tab]:hover{background:#e5eee6}.appTabs [aria-selected=true]{background:#236456;color:white;border-color:#236456}.appTabs [aria-selected=true]:hover{background:#1b5145}
+.workContext{display:flex;justify-content:space-between;align-items:center;gap:14px;margin:16px 0 22px;color:#617568;font-size:12px}.workContext>span:first-child{min-width:0;overflow-wrap:anywhere}.workContext .status{flex-shrink:0;max-width:55%;overflow-wrap:anywhere}
+.tabPanel{min-width:0}.tabPanel:focus{outline:none}.designLayout{display:grid;grid-template-columns:minmax(0,760px) minmax(230px,1fr);align-items:start;gap:24px}.shapeLayout{display:grid;grid-template-columns:390px minmax(0,1fr);gap:24px;align-items:start}
+.workflowGuide{margin-top:0;position:sticky;top:20px}.workflowGuide h3:not(:first-child){margin-top:27px}.workflowGuide button{width:100%}
+.nextStep{margin-top:24px;padding-top:16px;border-top:1px solid #e0e8e0}.nextStep p{color:#68776d;font-size:12px}.nextStep button{width:100%}
+#panel-projects,#panel-settings{max-width:860px;margin:0 auto}.projectEditor{margin-bottom:16px}.projectEditor h2{font-size:22px}.settingsHeading{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px}.aiSettings{margin:0;border-color:#e0e5dd;border-radius:15px;padding:24px}.aiSettings legend{font-weight:700}
+.aiConsent input,.meshCheck input,.useAi input{width:18px;height:18px;flex-shrink:0;padding:0}.aiConsent,.meshCheck{display:flex!important;gap:8px}.useAi{display:inline-flex!important}
+#panel-mesh .meshImport{margin:0}.designLayout .sectionhead:first-child{margin-top:0}.reference a{overflow-wrap:anywhere}
+@media(max-width:930px){.designLayout,.shapeLayout{grid-template-columns:1fr}.workflowGuide{position:static}.shapeLayout .preview{min-height:380px}}
+@media(max-width:480px){main{margin-top:20px}.pageIntro h1{font-size:24px}.appTabs [role=tab]{padding:12px 16px;font-size:13px}.workContext{align-items:flex-start}.aiSettings{padding:16px}.tabPanel .meshImport{padding:16px}}
+@media(max-width:480px){.appTabs{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));overflow:visible}.appTabs [role=tab]{padding:11px 4px;font-size:12px}}
+
+.tabPanel:focus-visible{outline:2px solid #558f80;outline-offset:5px;border-radius:12px}

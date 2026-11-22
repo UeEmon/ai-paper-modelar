@@ -1,5 +1,11 @@
 const {test,expect}=require('@playwright/test');
-async function open(page){await page.goto('/');await page.locator('.aiSettings summary').click();}
+async function open(page){await page.goto('/');await page.getByRole('tab',{name:'AI設定',exact:true}).click();}
+async function propose(page){
+  await page.getByRole('tab',{name:'資料・AI提案',exact:true}).click();
+  await page.locator('#plan').click();
+  await expect(page.locator('#plan')).toBeEnabled();
+  await page.getByRole('tab',{name:'AI設定',exact:true}).click();
+}
 async function create(page,name,password){
   await page.locator('#aiName').fill(name);await page.locator('#aiPassword').fill(password);
   await page.locator('#aiCreate').click();await expect(page.locator('#aiMessage')).toContainText('作成しました');
@@ -20,7 +26,7 @@ test('profile lifecycle, encrypted reload, provider switching and proposal reque
   const alice=await page.locator('#aiProfile').inputValue();
   await save(page,'openai','custom-model','test-alice-key');
   await expect(page.locator('#aiKey')).toHaveValue('');
-  await page.locator('#plan').click();await expect.poll(()=>requests.length).toBe(1);
+  await propose(page);await expect.poll(()=>requests.length).toBe(1);
   expect(requests[0].headers()['x-ai-key']).toBe('test-alice-key');
   expect(requests[0].postData()).not.toContain('test-alice-key');
   await save(page,'gemini','gemini-test','test-gemini-key');
@@ -29,9 +35,9 @@ test('profile lifecycle, encrypted reload, provider switching and proposal reque
   await page.locator('#aiSave').click();await expect(page.locator('#aiState')).toContainText('openai');
   const storage=await page.evaluate(()=>JSON.stringify(localStorage));
   for(const secret of ['test-alice-key','test-gemini-key','alice-passphrase','custom-model'])expect(storage).not.toContain(secret);
-  await page.reload();await page.locator('.aiSettings summary').click();
+  await page.reload();await page.getByRole('tab',{name:'AI設定',exact:true}).click();
   await expect(page.locator('#aiState')).toContainText('ロック中');
-  await page.locator('#plan').click();await expect.poll(()=>requests.length).toBe(2);
+  await propose(page);await expect.poll(()=>requests.length).toBe(2);
   expect(requests[1].headers()['x-ai-key']).toBeUndefined();
   await page.locator('#aiProfile').selectOption(alice);
   await page.locator('#aiPassword').fill('wrong-passphrase');await page.locator('#aiUnlock').click();
@@ -40,11 +46,11 @@ test('profile lifecycle, encrypted reload, provider switching and proposal reque
   await page.locator('#aiPassword').fill('alice-passphrase');await page.locator('#aiUnlock').click();
   await expect(page.locator('#aiState')).toContainText('openai');
   await create(page,'Bob','bob-passphrase!');await save(page,'anthropic','claude-test','test-bob-key');
-  await page.locator('#plan').click();await expect.poll(()=>requests.length).toBe(3);
+  await propose(page);await expect.poll(()=>requests.length).toBe(3);
   expect(requests[2].headers()['x-ai-key']).toBe('test-bob-key');
   await page.locator('#aiProfile').selectOption(alice);
   await expect(page.locator('#aiProvider')).toBeDisabled();
-  await page.locator('#plan').click();await expect.poll(()=>requests.length).toBe(4);
+  await propose(page);await expect.poll(()=>requests.length).toBe(4);
   expect(requests[3].headers()['x-ai-key']).toBeUndefined();
   page.once('dialog',dialog=>dialog.accept());await page.locator('#aiDelete').click();
   await expect(page.locator('#aiProfile option')).toHaveCount(2);
@@ -54,7 +60,7 @@ test('denied storage leaves offline proposals available',async({page})=>{
   await page.addInitScript(()=>Object.defineProperty(window,'localStorage',{get(){throw Error('denied');}}));
   await open(page);
   await expect(page.locator('#aiMessage')).toContainText('暗号化保存を利用できません');
-  await page.locator('#plan').click();await expect(page.locator('#status')).toContainText('定型案');
+  await propose(page);await expect(page.locator('#status')).toContainText('定型案');
 });
 test('other tab changes lock the active profile',async({page,context})=>{
   await open(page);await create(page,'Alice','alice-passphrase');await save(page,'openai','test','test-secret');
@@ -84,7 +90,7 @@ test('local endpoint and vision settings are encrypted, restored and sent only t
   await page.locator('#aiEndpoint').fill('http://host.docker.internal:11434');
   await page.locator('#aiModel').fill('org/model:q4_K_M');
   await page.locator('#aiSave').click();await expect(page.locator('#aiMessage')).toContainText('暗号化して保存しました');
-  await page.locator('#plan').click();await expect.poll(()=>requests.length).toBe(1);
+  await propose(page);await expect.poll(()=>requests.length).toBe(1);
   expect(requests[0].headers()['x-ai-key']).toBeUndefined();
   expect(requests[0].headers()['x-ai-endpoint']).toBe('http://host.docker.internal:11434');
   expect(requests[0].headers()['x-ai-vision']).toBe('false');
@@ -95,11 +101,11 @@ test('local endpoint and vision settings are encrypted, restored and sent only t
   await expect(page.locator('#aiEndpoint')).toHaveValue('http://localhost:1234/v1');
   await page.locator('#aiModel').fill('publisher/model');await page.locator('#aiVision').check();
   await page.locator('#aiSave').click();await expect(page.locator('#aiState')).toContainText('local_openai');
-  await page.reload();await page.locator('.aiSettings summary').click();
+  await page.reload();await page.getByRole('tab',{name:'AI設定',exact:true}).click();
   await page.locator('#aiProfile').selectOption(id);await page.locator('#aiPassword').fill('local-passphrase');
   await page.locator('#aiUnlock').click();await expect(page.locator('#aiState')).toContainText('local_openai');
   await expect(page.locator('#aiVision')).toBeChecked();
-  await page.locator('#plan').click();await expect.poll(()=>requests.length).toBe(2);
+  await propose(page);await expect.poll(()=>requests.length).toBe(2);
   expect(requests[1].headers()['x-ai-model']).toBe('publisher/model');
   expect(requests[1].headers()['x-ai-vision']).toBe('true');
   await page.locator('#aiProvider').selectOption('ollama');

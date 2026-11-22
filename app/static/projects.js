@@ -110,6 +110,7 @@ const paperLibrary = {
       try{localStorage.removeItem("paper-modelar-project-id");}catch{}
     }
     this.render();
+    window.paperTabs?.refreshContext();
   },
   async create(){
     const btn=el("newProject");btn.disabled=true;
