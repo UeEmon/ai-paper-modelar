@@ -5,7 +5,7 @@ AI Paper Modelarは、写真・スケッチ・公開資料・アイデアを参�
 ## 初期実装
 
 - Wikipedia日本語版で対象の名称を検索し、参考情報のURLを一覧表示。架空作品など検索結果がない場合も制作条件の入力を継続できます。
-- OpenAI・Gemini・AnthropicのAPIを切替可能。APIキーはサーバー側環境変数に保持。未設定ならオフライン案を表示。
+- OpenAI・Gemini・AnthropicのAPIを切替可能。モデルとAPIキーはブラウザのユーザープロファイルごとに暗号化保存。未設定・ロック中なら定型案を表示。
 - 忠実再現、標準デフォルメ、アニメ風、昭和レトロ、簡単組立を選択。
 - 縮尺は実寸1/1、1/12、1/24、1/35、1/48、1/72、1/100、鉄道模型向け1/150・1/160・1/80・1/87・1/220、任意1/1〜1/500。
 - m・cm・mm単位で元の幅、奥行、高さを入力。建物型・箱型に加え、円柱、円すい／円すい台、正多角柱、正多角すいの展開図をA4実寸PDF・SVGで生成。入力値は内部的にmへ換算するため既存プロジェクトと互換性があります。
@@ -26,8 +26,25 @@ Docker Desktopを起動したら、リポジトリ直下で:
 
     docker compose down
 
-AI APIを使う場合は .env に AI_PROVIDER=openai と OPENAI_API_KEY=your-key などを設定してください。GeminiならAI_PROVIDER=gemini / GEMINI_API_KEY、AnthropicならAI_PROVIDER=anthropic / ANTHROPIC_API_KEYを使います。
-モデル名は OPENAI_MODEL / GEMINI_MODEL / ANTHROPIC_MODEL で変更できます。APIキーをコミットしないでください。
+## 生成AIの設定と秘密情報
+
+1. 画面上部の「生成AIの設定」を開き、プロファイル名と12文字以上の固有のパスフレーズで新規作成します。
+2. OpenAI / Gemini / Anthropic を選び、利用権限のあるモデルIDとAPIキーを入力して「暗号化して保存・使用」を押します。初期モデルIDは入力例であり、提供状況・権限は各社で確認してください。モデルIDは直接変更できます。
+3. 「AI提案」で保存済みの選択先を使用します。API利用料が発生する場合があります。各社のモデルとキーを個別に保持し、キー空欄での再保存は選択先のキーを維持します。
+4. 使用後は「ロック」。再読込・画面離脱・プロファイル切替・別タブでの保存変更でもロックされ、解除するまで定型案になります。自動で最後の利用者を解除しません。「使わない」を保存すると定型案になります。
+5. プロファイル選択後にパスフレーズで解除できます。「削除」はそのプロファイルの保存済みAI設定・全プロバイダーのキーを削除します。ブラウザのサイトデータ削除でも消えます。**パスフレーズの復旧・端末間同期はありません。**
+
+### 保存・通信の境界
+
+- `localStorage` の `paper-modelar-ai-v1:<ランダムUUID>` に、プロファイル名・形式バージョン・salt・IV・暗号文を保存します。モデル・プロバイダー・APIキーは AES-GCM 256bit で暗号化。PBKDF2 SHA-256（600,000回、プロファイル固有16byte salt）から鍵を導出し、保存ごとに12byte IVを生成、プロファイルIDを認証データに使います。パスフレーズ・復号鍵・平文キーは永続保存しません。プロファイル名は平文なので秘密情報を入れないでください。
+- HTTPS または localhost の Web Crypto が必要です。保存を拒否したブラウザ・破損したデータ・誤ったパスフレーズではキーを使わず、定型案を利用できます。
+- 解除中の設定はページのメモリだけに保持。APIキー入力欄は保存・解除・切替後に空にし、再表示しません。同一ブラウザの別タブから保存内容が変更された場合もロックします。
+- `POST /api/proposals` に `X-AI-Provider` / `X-AI-Model` / `X-AI-Key` ヘッダーを送り、アプリサーバーが固定の各社HTTPSエンドポイントへ転送します。**キーはサーバーのリクエスト処理中に扱いますが、DB・ファイル・環境変数・プロジェクト・URLには保存しません。** サーバーの旧 `AI_PROVIDER` / `*_API_KEY` / `*_MODEL` 環境変数は参照しません。既存の.envやホスティング設定から旧AIキーを削除してください。
+- キーなしリクエストは常に定型案。別利用者・別リクエストへのキー継承はありません。API設定検証・外部APIエラーは汎用メッセージにし、応答は `Cache-Control: no-store`。キーを含むヘッダー・本文をプロキシ/APM/デバッグログへ記録しないでください。リポジトリに実キーを置かないでください。
+- OpenAIへのリクエストでは `store: false` を指定します。各社側の保持・利用条件は契約と設定に従います。参考画像/PDFの送信は引き続き資料送信チェックが必要です。キーやパスフレーズはAIへのプロンプトには含めません。
+- これは**ブラウザ内のAI設定分離であり、サーバーのユーザー認証ではありません**。制作プロジェクトの共有構造は従来どおり単独利用向けです。暗号化は保存データを保護しますが、解除中のXSS・悪意あるブラウザ拡張・端末管理者・信頼できないサーバーからは保護できません。共有端末は別のOS/ブラウザアカウントも使ってください。画面には同一オリジン限定のCSPを設定しています。外部公開にはHTTPS・認証・データ隔離が別途必要です。
+
+API実装の参照: [OpenAI Responses](https://developers.openai.com/api/reference/resources/responses/methods/create)、[Gemini generateContent](https://aistudio.google.com/api-reference/generate-content)、[Anthropic Messages](https://platform.claude.com/docs/en/api/messages)。
 
 ## SenroLab 連携（展開図API）
 
@@ -43,6 +60,12 @@ SenroLab（Nゲージのレイアウト設計アプリ）の「再現してみ�
 
     python -m pip install -r requirements-dev.txt
     pytest -q
+    npm ci
+    npm test
+    npx playwright install chromium
+    npm run test:browser
+
+ブラウザテストは `.venv/bin/python` を使います。別環境では `PYTHON=python npm run test:browser` のように指定してください。3社への送信はモックし、実キー・有料API呼び出しを使わず、設定の保存/復元/削除、ロック、利用者分離、資料送信同意、外部エラーを検証します。CIでもPython・暗号化の単体テスト・Chromium操作テストを実行します。
 
 ## 自分で撮影した写真・設計図・PDFの追加
 

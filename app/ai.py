@@ -1,7 +1,8 @@
 """Text design proposals with optional image/PDF reference input and user consent."""
 import base64
 import json
-import os
+import re
+from dataclasses import dataclass, field
 from typing import Literal
 
 import httpx
@@ -9,6 +10,27 @@ from pydantic import BaseModel, Field
 
 from .uploads import get_asset
 from .projects import get_asset_for_ai
+
+
+@dataclass(frozen=True)
+class AICredentials:
+    provider: str
+    model: str
+    api_key: str = field(repr=False)
+
+
+def credentials_from_headers(headers):
+    """Validate manually so validation responses never echo credential inputs."""
+    values = [headers.get(name, "") for name in
+              ("x-ai-provider", "x-ai-model", "x-ai-key")]
+    if not any(values):
+        return None
+    provider, model, key = values
+    if (provider not in {"openai", "gemini", "anthropic"}
+            or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._:-]{0,119}", model)
+            or not re.fullmatch(r"[!-~]{1,512}", key)):
+        raise ValueError("AI設定を確認してください。")
+    return AICredentials(provider, model, key)
 
 
 class ProposalRequest(BaseModel):
@@ -54,15 +76,10 @@ def offline(req: ProposalRequest):
     }
 
 
-async def proposals(req: ProposalRequest):
-    provider = os.getenv("AI_PROVIDER", "none").lower()
-    keys = {
-        "openai": os.getenv("OPENAI_API_KEY", ""),
-        "gemini": os.getenv("GEMINI_API_KEY", ""),
-        "anthropic": os.getenv("ANTHROPIC_API_KEY", ""),
-    }
-    if provider not in keys or not keys[provider]:
+async def proposals(req: ProposalRequest, credentials: AICredentials | None = None):
+    if credentials is None:
         return offline(req)
+    provider, model, key = credentials.provider, credentials.model, credentials.api_key
 
     # Never access/transmit user media without the UI's opt-in.
     assets = []
@@ -130,9 +147,9 @@ async def proposals(req: ProposalRequest):
                     for b in images
                 )
                 r = await client.post("https://api.openai.com/v1/responses",
-                    headers={"Authorization": "Bearer " + keys[provider]},
-                    json={"model": os.getenv("OPENAI_MODEL", "gpt-4.1-mini"),
-                          "instructions": system,
+                    headers={"Authorization": "Bearer " + key},
+                    json={"model": model,
+                          "instructions": system, "store": False,
                           "input": [{"role": "user", "content": content}]})
                 r.raise_for_status()
                 data = r.json()
@@ -140,7 +157,6 @@ async def proposals(req: ProposalRequest):
                               for c in out.get("content", [])
                               if c.get("type") == "output_text")
             elif provider == "gemini":
-                model = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
                 parts = [{"text": system + "\n" + prompt}]
                 parts.extend(
                     {"inline_data": {"mime_type": "image/jpeg", "data": b}}
@@ -149,7 +165,7 @@ async def proposals(req: ProposalRequest):
                 r = await client.post(
                     "https://generativelanguage.googleapis.com/v1beta/models/"
                     + model + ":generateContent",
-                    headers={"x-goog-api-key": keys[provider]},
+                    headers={"x-goog-api-key": key},
                     json={"contents": [{"parts": parts}],
                           "generationConfig": {"responseMimeType": "application/json"}})
                 r.raise_for_status()
@@ -164,8 +180,8 @@ async def proposals(req: ProposalRequest):
                     for b in images
                 )
                 r = await client.post("https://api.anthropic.com/v1/messages",
-                    headers={"x-api-key": keys[provider], "anthropic-version": "2023-06-01"},
-                    json={"model": os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4-5"),
+                    headers={"x-api-key": key, "anthropic-version": "2023-06-01"},
+                    json={"model": model,
                           "max_tokens": 1300, "system": system,
                           "messages": [{"role": "user", "content": blocks}]})
                 r.raise_for_status()
@@ -190,10 +206,13 @@ async def proposals(req: ProposalRequest):
         notes = [str(x)[:240] for x in result.get("notes", [])[:8]]
         if len(assets) > 3:
             notes.append("画像解析は先頭3件のみ。その他はファイルの説明とPDFテキストを参照しました。")
+        accepted = [{k: v.replace(key, "[redacted]") for k, v in item.items()}
+                    for item in accepted]
+        notes = [note.replace(key, "[redacted]") for note in notes]
         return {"provider": provider, "place": req.place,
                 "proposals": accepted, "notes": notes,
                 "analyzed_uploads": len(images)}
-    except (httpx.HTTPError, ValueError, KeyError, TypeError, IndexError):
+    except (httpx.HTTPError, ValueError, KeyError, TypeError, IndexError, AttributeError):
         answer = offline(req)
         answer["notes"].insert(0, "外部AIへの接続・応答に問題があるため定型案を表示しています。")
         return answer

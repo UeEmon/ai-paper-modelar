@@ -87,15 +87,13 @@ def test_no_external_media_without_consent(monkeypatch):
         sent.append(json.loads(req.content))
         text=json.dumps({"proposals":[{"style":"faithful","title":"案","description":"説明"}],"notes":[]})
         return httpx.Response(200,json={"output":[{"content":[{"type":"output_text","text":text}]}]})
-    monkeypatch.setenv("AI_PROVIDER","openai")
-    monkeypatch.setenv("OPENAI_API_KEY","fake")
     monkeypatch.setattr(ai.httpx,"AsyncClient",
         lambda **kwargs:original(transport=httpx.MockTransport(handler),**kwargs))
     base={"place":"Old Station","project_id":pid,"project_asset_ids":[asset["id"]]}
-    a=asyncio.run(ai.proposals(ProposalRequest(**base,include_uploads=False)))
+    a=asyncio.run(ai.proposals(ProposalRequest(**base,include_uploads=False), ai.AICredentials("openai", "test-model", "fake")))
     assert a["analyzed_uploads"]==0
     assert "input_image" not in json.dumps(sent[-1])
-    b=asyncio.run(ai.proposals(ProposalRequest(**base,include_uploads=True)))
+    b=asyncio.run(ai.proposals(ProposalRequest(**base,include_uploads=True), ai.AICredentials("openai", "test-model", "fake")))
     assert b["analyzed_uploads"]==1
     assert "input_image" in json.dumps(sent[-1])
 

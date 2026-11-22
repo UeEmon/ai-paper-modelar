@@ -34,6 +34,23 @@ jobs:
         run: python -m compileall -q app
       - name: Unit tests
         run: python -m pytest -q
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - name: Encrypted AI vault tests
+        run: npm test
+      - name: Install browser
+        run: npx playwright install --with-deps chromium
+      - name: AI settings browser tests
+        run: npm run test:browser
+        env:
+          PYTHON: python
+      - name: AI settings JavaScript syntax check
+        run: |
+          node --check app/static/ai-vault.js
+          node --check app/static/ai-settings.js
       - name: JavaScript syntax check
         run: node --check app/static/app.js
       - name: Project library JavaScript syntax check
