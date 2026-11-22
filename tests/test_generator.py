@@ -91,5 +91,5 @@ def test_legacy_model_defaults_unchanged():
 def test_generic_categories_and_custom_scales():
     for subject in ["architecture","vehicle","landscape","prop",
                     "character","original","railway","other"]:
-        spec = ModelSpec(subject_type=subject, template="box", scale=12)
+        spec = ModelSpec(subject_type=subject, template="box", scale=12, width_m=0.2, depth_m=0.1, height_m=0.12)
         assert summary(spec)["subject_type"] == subject
