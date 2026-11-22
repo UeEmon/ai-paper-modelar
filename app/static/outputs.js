@@ -26,10 +26,11 @@
   try{
    const response=await fetch('/api/generated-models',{cache:'no-store'});if(!response.ok)throw Error('生成モデル一覧を取得できませんでした。');
    const data=await response.json();list.replaceChildren();
-   if(!data.models.length)list.textContent='生成した3Dモデルは自動でここに保存されます。';
+   if(!data.models.length)list.textContent='生成した3Dモデルや、取得・保存した公開3Dモデルをここから開けます。';
    for(const model of data.models){
     const row=add(list,'div','');row.className='savedGeneratedModel';
     add(row,'strong',model.name);add(row,'p',model.provider+' / '+model.faces+'三角形 / '+model.size_mm.join(' × ')+' mm');
+    if(model.attribution?.source_url?.startsWith('https://polyhaven.com/a/')){const source=add(row,'a','Poly Havenの出典・CC0ライセンス');source.href=model.attribution.source_url;source.target='_blank';source.rel='noopener noreferrer';}
     const actions=add(row,'div','');actions.className='projectButtons';
     const open=add(actions,'button','3Dを開く');open.type='button';open.className='secondary';
     open.addEventListener('click',async()=>{try{await window.imageWorkbench.openSaved(model.preview_url);}catch(e){list.textContent=e.message;}});
@@ -43,12 +44,12 @@
       await window.meshWorkbench.loadFile(file,{saveOriginal:false});
      }catch(e){list.textContent=e.message;}finally{unfold.disabled=false;}
     });
-    for(const [url,label] of [[model.obj_url,'OBJを保存'],[model.glb_url,'生成GLBを保存']]){
+    for(const [url,label] of [[model.obj_url,'OBJを保存'],[model.glb_url,'GLBを保存']]){
      if(!url)continue;const link=add(actions,'a',label);link.href=url;link.download='generated-model.'+(label.includes('GLB')?'glb':'obj');
     }
     const remove=add(actions,'button','3Dを削除');remove.type='button';remove.className='secondary';
     remove.addEventListener('click',async()=>{
-     if(!confirm('この生成3Dモデルをサーバーから削除しますか？'))return;
+     if(!confirm('この3Dモデルをサーバーから削除しますか？'))return;
      const response=await fetch(model.preview_url,{method:'DELETE'});if(!response.ok){list.textContent='生成モデルを削除できませんでした。';return;}
      await refresh();
     });
