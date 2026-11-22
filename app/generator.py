@@ -7,6 +7,8 @@ from typing import Literal
 from xml.sax.saxutils import escape
 
 from pydantic import BaseModel, Field, model_validator
+
+from .net_engine import build_parametric_parts
 from reportlab.lib.colors import HexColor
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.units import mm
@@ -18,7 +20,7 @@ AREA_X, AREA_Y, AREA_W, AREA_H, OVERLAP = 12.0, 28.0, 186.0, 225.0, 5.0
 Style = Literal["faithful", "standard", "anime", "retro", "easy"]
 Roof = Literal["gable", "flat"]
 SubjectType = Literal["architecture", "vehicle", "landscape", "prop", "character", "original", "railway", "other"]
-Template = Literal["building", "box"]
+Template = Literal["building", "box", "cylinder", "cone", "prism", "pyramid"]
 InputUnit = Literal["m", "cm", "mm"]
 
 
@@ -35,6 +37,8 @@ class ModelSpec(BaseModel):
     subject_type: SubjectType = "architecture"
     template: Template = "building"
     input_unit: InputUnit = "m"  # Display preference; actual dimensions remain metres.
+    sides: int = Field(default=6, ge=3, le=12, description="Regular polygon side count")
+    top_ratio: float = Field(default=0.5, ge=0, le=1, description="Cone top diameter / base diameter")
 
     @model_validator(mode="after")
     def check(self):
@@ -189,6 +193,8 @@ def box_parts(spec: ModelSpec) -> list[dict]:
 
 
 def build_parts(spec: ModelSpec) -> list[dict]:
+    if spec.template in {"cylinder", "cone", "prism", "pyramid"}:
+        return build_parametric_parts(spec, COLORS[spec.style][0])
     if spec.template == "box":
         return box_parts(spec)
     w = miniature_mm(spec.width_m, spec.scale)
@@ -219,22 +225,68 @@ def _num_tiles(length: float, area: float) -> int:
 
 
 def page_jobs(spec: ModelSpec) -> list[dict]:
-    jobs = []
+    """Shelf-pack small parts; tile larger parts with 5 mm joining overlap.
+
+    Returns *printable pages*, each containing one or more placed source parts.
+    Every placement has a clipping window and source/destination offsets.
+    """
+    pages = []
+    placed = []
+    cursor_x = cursor_y = shelf_height = 0.0
+    gap = 3.0
+
+    def flush():
+        nonlocal placed, cursor_x, cursor_y, shelf_height
+        if placed:
+            pages.append({"placements": placed})
+            placed = []
+        cursor_x = cursor_y = shelf_height = 0.0
+
     for part in build_parts(spec):
         nx = _num_tiles(part["w"], AREA_W)
         ny = _num_tiles(part["h"], AREA_H)
-        for yi in range(ny):
-            for xi in range(nx):
-                jobs.append({"part": part, "x": xi * (AREA_W - OVERLAP),
-                             "y": yi * (AREA_H - OVERLAP),
-                             "tile": (xi + 1, yi + 1, nx, ny)})
-    if len(jobs) > 100:
-        raise ValueError("The model requires over 100 A4 pages; use a smaller model or scale")
-    return jobs
+        if nx > 1 or ny > 1:
+            flush()
+            if len(pages) + nx * ny > 100:
+                raise ValueError("The model requires over 100 A4 pages; use smaller dimensions or a larger scale denominator")
+            for yi in range(ny):
+                for xi in range(nx):
+                    pages.append({"placements": [{
+                        "part": part,
+                        "src_x": xi * (AREA_W - OVERLAP),
+                        "src_y": yi * (AREA_H - OVERLAP),
+                        "dst_x": AREA_X,
+                        "dst_y": AREA_Y,
+                        "clip_w": AREA_W,
+                        "clip_h": AREA_H,
+                        "tile": (xi + 1, yi + 1, nx, ny),
+                    }]})
+            continue
 
+        if cursor_x and cursor_x + part["w"] > AREA_W:
+            cursor_x = 0.0
+            cursor_y += shelf_height + gap
+            shelf_height = 0.0
+        if cursor_y + part["h"] > AREA_H:
+            flush()
+        if len(pages) >= 100:
+            raise ValueError("The model requires over 100 A4 pages")
+        placed.append({
+            "part": part, "src_x": 0.0, "src_y": 0.0,
+            "dst_x": AREA_X + cursor_x, "dst_y": AREA_Y + cursor_y,
+            "clip_w": part["w"], "clip_h": part["h"],
+            "tile": (1, 1, 1, 1),
+        })
+        cursor_x += part["w"] + gap
+        shelf_height = max(shelf_height, part["h"])
+    flush()
+    if len(pages) > 100:
+        raise ValueError("The model requires over 100 A4 pages")
+    return pages
 
 def summary(spec: ModelSpec) -> dict:
-    d = miniature_mm(spec.depth_m, spec.scale)
+    round_or_regular = spec.template in {"cylinder", "cone", "prism", "pyramid"}
+    d = miniature_mm(spec.width_m if round_or_regular else spec.depth_m, spec.scale)
     rise = d / 2 * tan(radians(spec.pitch_deg)) if spec.template == "building" and spec.roof == "gable" else 0
     jobs = page_jobs(spec)
     return {
@@ -247,20 +299,22 @@ def summary(spec: ModelSpec) -> dict:
         "scale": spec.scale,
         "subject_type": spec.subject_type,
         "template": spec.template,
+        "geometry": {"sides": spec.sides, "top_ratio": spec.top_ratio},
         "parts": [{"name": p["name"], "width_mm": round(p["w"], 1),
                    "height_mm": round(p["h"], 1)} for p in build_parts(spec)],
         "pages": len(jobs),
         "warnings": [
             "Dimensions are supplied by the user, not verified from online sources.",
             ("Windows and doors are illustrative printed details." if spec.template == "building"
-             else "Box template is a basic cuboid, not an automatic reconstruction of the subject."),
+             else "Shape is a parametric approximation, not an automatic reconstruction of the subject."),
             "Large parts are tiled with 5 mm overlap for assembly.",
+            "Cut and fold parts are designed for test assembly; paper thickness and kerf are not compensated.",
         ],
     }
 
 
 def _svg_graphic(g: dict) -> str:
-    s = ' stroke="' + g["stroke"] + '" stroke-width="0.25"'
+    s = ' stroke="' + g["stroke"] + '" stroke-width="0.25" data-layer="' + g["kind"] + '"'
     if g["kind"] == "fold":
         s += ' stroke-dasharray="2,1"'
     fill = g.get("fill", "none")
@@ -275,36 +329,51 @@ def _svg_graphic(g: dict) -> str:
 
 
 def render_svg(spec: ModelSpec, page: int = 0) -> str:
-    jobs = page_jobs(spec)
-    if page < 0 or page >= len(jobs):
+    pages = page_jobs(spec)
+    if page < 0 or page >= len(pages):
         raise IndexError("Page not found")
-    job = jobs[page]
-    part = job["part"]
-    xoffset, yoffset = AREA_X - job["x"], AREA_Y - job["y"]
-    label = escape(spec.name + " | " + part["name"] + " | 1/" + str(spec.scale))
-    graphics = "".join(_svg_graphic(g) for g in part["graphics"])
-    tx, ty, nx, ny = job["tile"]
-    header = '<?xml version="1.0" encoding="utf-8"?>'
-    header += ('<svg xmlns="http://www.w3.org/2000/svg" '
-               'width="210mm" height="297mm" viewBox="0 0 210 297">')
-    header += '<rect width="210" height="297" fill="white"/>'
-    header += '<text x="12" y="17" font-family="sans-serif" font-size="4.3">' + label + '</text>'
-    header += ('<text x="198" y="23" font-family="sans-serif" text-anchor="end" '
-               'font-size="3">Tile {}/{}, page {}/{}</text>'.format(
-                   tx, nx, page + 1, len(jobs)))
-    header += ('<defs><clipPath id="area"><rect x="12" y="28" width="186" '
-               'height="225"/></clipPath></defs>')
-    header += '<g clip-path="url(#area)" transform="translate({},{})">'.format(
-        xoffset, yoffset) + graphics + '</g>'
-    header += ('<rect x="12" y="28" width="186" height="225" fill="none" '
-               'stroke="#bbb" stroke-width=".12"/>')
-    header += ('<line x1="14" y1="278" x2="64" y2="278" stroke="black" stroke-width=".4"/>'
-               '<line x1="14" y1="276" x2="14" y2="280" stroke="black" stroke-width=".3"/>'
-               '<line x1="64" y1="276" x2="64" y2="280" stroke="black" stroke-width=".3"/>'
-               '<text x="14" y="284" font-size="3.2">50 mm CHECK - PRINT AT 100%</text>'
-               '<text x="14" y="290" font-size="2.8">Solid: cut | Dashed: fold | A4</text></svg>')
-    return header
-
+    label = escape(spec.name + " | 1/" + str(spec.scale))
+    pieces = pages[page]["placements"]
+    output = [
+        '<?xml version="1.0" encoding="utf-8"?>',
+        '<svg xmlns="http://www.w3.org/2000/svg" width="210mm" height="297mm" '
+        'viewBox="0 0 210 297">',
+        '<rect width="210" height="297" fill="white"/>',
+        '<text x="12" y="17" font-family="sans-serif" font-size="4.3">' + label + '</text>',
+        '<text x="198" y="23" font-family="sans-serif" text-anchor="end" '
+        'font-size="3">Page {}/{}</text>'.format(page + 1, len(pages)),
+        '<defs>',
+    ]
+    for i, place in enumerate(pieces):
+        output.append('<clipPath id="piece{}"><rect x="{}" y="{}" width="{}" '
+                      'height="{}"/></clipPath>'.format(i, place["dst_x"],
+                        place["dst_y"], place["clip_w"], place["clip_h"]))
+    output.append('</defs>')
+    for i, place in enumerate(pieces):
+        dx = place["dst_x"] - place["src_x"]
+        dy = place["dst_y"] - place["src_y"]
+        graphics = "".join(_svg_graphic(g) for g in place["part"]["graphics"])
+        output.append('<g clip-path="url(#piece{})" transform="translate({},{})">'
+                      '{}</g>'.format(i, dx, dy, graphics))
+        tx, ty, nx, ny = place["tile"]
+        part_label = place["part"]["name"]
+        if nx > 1 or ny > 1:
+            part_label += " ({}/{}, {}/{})".format(tx, nx, ty, ny)
+        output.append('<text x="{}" y="{}" font-family="sans-serif" font-size="2.7" '
+                      'fill="#444">{}</text>'.format(
+                          place["dst_x"] + 1, place["dst_y"] + 3.3,
+                          escape(part_label[:52])))
+    output.extend([
+        '<rect x="12" y="28" width="186" height="225" fill="none" '
+        'stroke="#bbb" stroke-width=".12"/>',
+        '<line x1="14" y1="278" x2="64" y2="278" stroke="black" stroke-width=".4"/>',
+        '<line x1="14" y1="276" x2="14" y2="280" stroke="black" stroke-width=".3"/>',
+        '<line x1="64" y1="276" x2="64" y2="280" stroke="black" stroke-width=".3"/>',
+        '<text x="14" y="284" font-size="3.2">50 mm CHECK - PRINT AT 100%</text>',
+        '<text x="14" y="290" font-size="2.8">Solid: cut | Dashed: fold | A4</text>',
+        '</svg>',
+    ])
+    return "".join(output)
 
 def _pdf_graphic(c: canvas.Canvas, g: dict, shift_x: float, shift_y: float) -> None:
     c.setStrokeColor(HexColor(g["stroke"]))
@@ -339,25 +408,38 @@ def _pdf_graphic(c: canvas.Canvas, g: dict, shift_x: float, shift_y: float) -> N
 def render_pdf(spec: ModelSpec) -> bytes:
     output = BytesIO()
     c = canvas.Canvas(output, pagesize=A4)
-    jobs = page_jobs(spec)
-    for index, job in enumerate(jobs):
-        part = job["part"]
+    pages = page_jobs(spec)
+    for index, page in enumerate(pages):
         c.setFont("Helvetica", 11)
         c.drawString(12 * mm, (PAGE_H - 17) * mm,
                      (spec.name.encode("ascii", "ignore").decode() or "Model")[:34]
-                     + " | " + part["name"] + " | 1/" + str(spec.scale))
+                     + " | 1/" + str(spec.scale))
         c.setFont("Helvetica", 8)
         c.drawRightString(198 * mm, (PAGE_H - 23) * mm,
-                          "Page " + str(index + 1) + "/" + str(len(jobs)))
-        c.saveState()
-        p = c.beginPath()
-        p.rect(AREA_X * mm, (PAGE_H - AREA_Y - AREA_H) * mm,
-               AREA_W * mm, AREA_H * mm)
-        c.clipPath(p, stroke=0, fill=0)
-        for graphic in part["graphics"]:
-            _pdf_graphic(c, graphic, AREA_X - job["x"], AREA_Y - job["y"])
-        c.restoreState()
+                          "Page " + str(index + 1) + "/" + str(len(pages)))
+        for place in page["placements"]:
+            c.saveState()
+            p = c.beginPath()
+            p.rect(place["dst_x"] * mm,
+                   (PAGE_H - place["dst_y"] - place["clip_h"]) * mm,
+                   place["clip_w"] * mm, place["clip_h"] * mm)
+            c.clipPath(p, stroke=0, fill=0)
+            for graphic in place["part"]["graphics"]:
+                _pdf_graphic(c, graphic,
+                             place["dst_x"] - place["src_x"],
+                             place["dst_y"] - place["src_y"])
+            c.restoreState()
+            part_label = place["part"]["name"]
+            tx, ty, nx, ny = place["tile"]
+            if nx > 1 or ny > 1:
+                part_label += " ({}/{}, {}/{})".format(tx, nx, ty, ny)
+            c.setFont("Helvetica", 7)
+            c.setFillColor(HexColor("#444444"))
+            c.drawString((place["dst_x"] + 1) * mm,
+                         (PAGE_H - place["dst_y"] - 3.3) * mm,
+                         part_label[:52])
         c.setStrokeColor(HexColor("#bbbbbb"))
+        c.setLineWidth(0.12 * mm)
         c.rect(AREA_X * mm, (PAGE_H - AREA_Y - AREA_H) * mm,
                AREA_W * mm, AREA_H * mm, fill=0, stroke=1)
         c.setStrokeColor(HexColor("#111111"))
