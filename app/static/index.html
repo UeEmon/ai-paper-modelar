@@ -76,7 +76,7 @@
 <h3>参考画像の候補</h3><div id="ideaPhotos" class="imageCandidates"></div>
 <p class="muted">使う資料を選ぶと3D作成画面へ進みます。画像送信への確認後に生成します。検索結果は図面の正確さ・利用許可・実寸を保証しません。</p>
 <h3>見つかった公開3Dオブジェクト</h3><label class="aiConsent"><input id="ideaPublicConsent" type="checkbox"><span>公開モデルの出典・利用条件を確認し、選択する3Dを取得・保存する</span></label><div id="ideaPublicModels"></div>
-<h3>手持ちの3Dモデルを使う</h3><p class="muted">検索やAIを使わず、OBJ/STLをアップロードして展開できます。最大5MB・500三角形。原本は保存しません。</p>
+<h3>手持ちの3Dモデルを使う</h3><p class="muted">検索やAIを使わず、OBJ/STLをアップロードして展開できます。最大5MB・3,000三角形。原本は保存しません。</p>
 <label for="ideaMeshFile">手持ちのOBJ/STL</label><input id="ideaMeshFile" type="file" accept=".obj,.stl,model/stl">
 <div class="twocol"><div><label for="ideaMeshUnit">座標の単位</label><select id="ideaMeshUnit"><option value="mm">mm</option><option value="cm">cm</option><option value="m">m</option></select></div><div><label for="ideaMeshScale">縮尺 1/X</label><input id="ideaMeshScale" type="number" min="1" max="500" value="1"></div></div>
 <button id="ideaMeshUnfold" type="button" class="secondary">アップロードした3Dから展開図を作る</button>
@@ -151,7 +151,7 @@
   <span class="status">OBJ / STL</span>
 </div>
 <p class="lead">手持ちのOBJ・STLモデルを三角形に展開し、切断線・折線・接着タブ付きのA4用紙に配置します。</p>
-<label for="meshFile">3Dモデルファイル（最大5MB、三角形500面以内）</label>
+<label for="meshFile">3Dモデルファイル（最大5MB、三角形3,000面以内）</label>
 <input id="meshFile" type="file" accept=".obj,.stl,model/stl">
 <div class="meshFields">
 <div><label for="meshUnit">モデル座標の単位</label>

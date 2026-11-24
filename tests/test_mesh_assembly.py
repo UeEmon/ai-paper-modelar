@@ -132,3 +132,82 @@ def test_svg_clip_window_stays_in_page_coordinates():
     assert re.search(r'<g clip-path="url\(#piece0\)"><g transform="translate\(', svg)
     assert 'data-fold="mountain"' in svg
     assert 'data-layer="seam-number"' in svg
+
+
+def _sphere_obj(around=32, down=24, radius=30.0):
+    vertices = [(0, 0, radius)]
+    for i in range(1, down):
+        t = pi * i / down
+        for j in range(around):
+            a = 2 * pi * j / around
+            vertices.append((radius * sin(t) * cos(a), radius * sin(t) * sin(a),
+                             radius * cos(t)))
+    vertices.append((0, 0, -radius))
+    faces = [(1, 2 + j, 2 + (j + 1) % around) for j in range(around)]
+    for i in range(down - 2):
+        a, b = 2 + i * around, 2 + (i + 1) * around
+        for j in range(around):
+            k = (j + 1) % around
+            faces += [(a + j, b + j, b + k), (a + j, b + k, a + k)]
+    last, a = len(vertices), 2 + (down - 2) * around
+    faces += [(a + j, last, a + (j + 1) % around) for j in range(around)]
+    return _obj(vertices, faces)
+
+
+def test_large_model_pieces_each_fit_one_sheet():
+    # A 160 mm ball does not fit one A4 sheet as one piece.
+    net = unfold(parse_obj(_sphere_obj(radius=80.0)))
+    assert net.stats["triangles"] == 1472
+    assert net.stats["islands"] > 1
+    spec = ModelSpec(name="ball", scale=1, template="box", width_m=0.05,
+                     depth_m=0.05, height_m=0.05, roof="flat", pitch_deg=0)
+    from app.generator import page_jobs
+    for page in page_jobs(spec, net.parts):
+        for place in page["placements"]:
+            assert place["tile"] == (1, 1, 1, 1)
+    assert any("1枚の用紙" in w for w in net.warnings)
+
+
+def test_glue_tabs_never_overlap_faces_or_each_other():
+    from app.mesh_unfolder import _intersection_area
+    net = unfold(parse_obj(_sphere_obj(around=16, down=12)))
+    for part in net.parts:
+        faces = [g["points"] for g in part["graphics"]
+                 if g["type"] == "poly" and g["fill"] == "#e9dfcc"]
+        tabs = [g["points"][1:5] for g in part["graphics"]
+                if g["type"] == "poly" and g["fill"] == "#f1e5cb"]
+        halves = [h for q in tabs for h in ([q[0], q[1], q[2]], [q[0], q[2], q[3]])]
+        for i, half in enumerate(halves):
+            for face in faces:
+                assert _intersection_area(half, face) < 1e-4
+            for j, other in enumerate(halves):
+                if i // 2 != j // 2:
+                    assert _intersection_area(half, other) < 1e-4
+
+
+def test_small_pieces_are_merged_into_neighbours():
+    from app import mesh_unfolder as engine
+    mesh = parse_obj(CUBE_OBJ)
+    points = [tuple(float(c) for c in v) for v in mesh.vertices]
+    neighbours = defaultdict(list)
+    for index, face in enumerate(mesh.faces):
+        for k in range(3):
+            neighbours[tuple(sorted((face[k], face[(k + 1) % 3])))].append(index)
+    saved = engine.ISLAND_MAX_LONG, engine.ISLAND_MAX_SHORT
+    try:
+        # Force one piece per square, then let them join again.
+        engine.ISLAND_MAX_LONG = engine.ISLAND_MAX_SHORT = 10.5
+        islands, _, _ = engine._grow(mesh.faces, points, neighbours,
+                                     lambda edge: 0., 10., list(range(12)))
+        assert len(islands) == 6
+    finally:
+        engine.ISLAND_MAX_LONG, engine.ISLAND_MAX_SHORT = saved
+    assert engine._merge_islands(islands, mesh.faces, neighbours, lambda edge: 0.) == 5
+    assert len([island for island in islands if island.coords]) == 1
+
+
+def test_three_thousand_triangles_are_accepted():
+    mesh = parse_obj(_sphere_obj(around=48, down=32))
+    assert len(mesh.faces) == 2976
+    net = unfold(mesh)
+    assert net.stats["triangles"] == 2976

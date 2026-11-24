@@ -321,7 +321,7 @@ async def proposals(req: ProposalRequest, credentials: AICredentials | None = No
         "Consider printable geometry, joints, level of detail and scale. "
         "The deterministic cutting template engine supports only simple buildings, "
         "cuboids, cylinders, conical frustums, regular polygon prisms and pyramids. "
-        "User-uploaded OBJ/STL triangle meshes (at most 500 faces) can be unfolded "
+        "User-uploaded OBJ/STL triangle meshes (at most 3,000 faces) can be unfolded "
         "via the separate local mesh import screen, but arbitrary AI images, "
         "high-density meshes or photos cannot automatically become accurate 3D models. "
         "When uploaded_image_count is 0 the references are TEXT ONLY: never claim to have seen photos or images. "
