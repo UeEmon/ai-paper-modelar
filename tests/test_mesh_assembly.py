@@ -211,3 +211,77 @@ def test_three_thousand_triangles_are_accepted():
     assert len(mesh.faces) == 2976
     net = unfold(mesh)
     assert net.stats["triangles"] == 2976
+
+
+def test_material_colours_from_mtl_and_vertex_colours():
+    from app.mesh_unfolder import parse_mtl
+    vertices, faces = _l_prism_triangles()
+    lines = ["v {} {} {}".format(*v) for v in vertices] + ["usemtl wall"]
+    lines += ["f {} {} {}".format(*(i + 1 for i in f)) for f in faces]
+    lines += ["usemtl roof", "f 7 9 10", "f 7 10 12", "f 10 11 12", "f 7 8 9",
+              "usemtl floor", "f 1 6 4", "f 6 5 4", "f 1 4 3", "f 1 3 2"]
+    mesh = parse_obj("\n".join(lines).encode())
+    colours = parse_mtl(b"newmtl wall\nKd 1 0 0\nnewmtl roof\nKd 0.2 0.2 0.2\n")
+    assert colours == {"wall": "#ff0000", "roof": "#333333"}
+    net = unfold(mesh, materials=colours)
+    fills = Counter(g["fill"] for g in _graphics(net) if g["type"] == "poly"
+                    and g["fill"] != "#f1e5cb")
+    assert fills["#ff0000"] == 12 and fills["#333333"] == 4 and fills["#e9dfcc"] == 4
+    assert any("色（Kd）のない材質" in w for w in net.warnings)
+    # Numbers on the dark roof are printed light.
+    assert net.stats["colored"] is True
+    plain = unfold(mesh)
+    assert any(".mtl" in w for w in plain.warnings)
+    assert unfold(mesh, materials=colours, use_colors=False).stats["colored"] is False
+
+    coloured = parse_obj(b"v 0 0 0 1 0 0\nv 10 0 0 255 0 0\nv 0 10 0 1 0 0\n"
+                         b"v 0 0 10 1 0 0\nf 1 3 2\nf 1 2 4\nf 2 3 4\nf 3 1 4\n")
+    assert coloured.face_colors == ["#ff0000"] * 4
+
+
+def test_generated_model_obj_carries_part_colours():
+    from app.image_geometry import Scene, build_model
+    scene = Scene(components=[
+        {"shape": "box", "size": [60, 30, 40], "position": [0, 0, 0], "color": "#d9c9a8"},
+        {"shape": "gable_roof", "size": [66, 16, 46], "position": [0, 30, 0],
+         "color": "#6b3a2e"}])
+    model = build_model(scene, 70)
+    mesh = parse_obj(model["obj"].encode())
+    assert set(mesh.face_colors) == {"#d9c9a8", "#6b3a2e"}
+
+
+def test_assembly_order_glues_each_part_to_built_ones():
+    from app.mesh_guide import assembly_order
+    guide = {"pieces": 3, "piece_of": [1] * 5 + [2] * 9 + [3] * 2,
+             "seams": [(1, 1, 2), (2, 1, 2), (3, 2, 3), (4, 1, 1)]}
+    steps = assembly_order(guide)
+    assert [s["piece"] for s in steps] == [2, 1, 3]
+    assert steps[0]["glue"] == {}
+    assert steps[1]["glue"] == {2: [1, 2]}
+    assert steps[2]["glue"] == {2: [3]}
+
+
+def test_guide_page_comes_first_in_svg_and_pdf():
+    from io import BytesIO
+    from fastapi.testclient import TestClient
+    from pypdf import PdfReader
+    from app.main import app
+    client = TestClient(app)
+    res = client.post("/api/mesh/jobs",
+                      data={"source_unit": "mm", "scale": "1", "glue_tabs": "true"},
+                      files={"file": ("ball.obj", _sphere_obj(radius=80.0), "text/plain"),
+                             "materials": ("ball.mtl", b"newmtl a\nKd 1 1 1\n", "text/plain")})
+    assert res.status_code == 201, res.text
+    data = res.json()
+    assert data["pages"] == data["stats"]["islands"] + 1
+    guide = client.get("/api/mesh/jobs/" + data["id"] + "/pages/0.svg").text
+    assert "組み立ての順番" in guide
+    assert guide.count('data-layer="part-number"') >= data["stats"]["islands"]
+    pdf = PdfReader(BytesIO(client.get("/api/mesh/jobs/" + data["id"] + "/template.pdf").content))
+    assert len(pdf.pages) == data["pages"]
+    assert "組み立て説明" in pdf.pages[0].extract_text()
+    assert "Page 2/" in pdf.pages[1].extract_text()
+    big = client.post("/api/mesh/jobs", data={"source_unit": "mm", "scale": "1"},
+                      files={"file": ("c.obj", CUBE_OBJ, "text/plain"),
+                             "materials": ("c.mtl", b"x" * (256 * 1024 + 1), "text/plain")})
+    assert big.status_code == 413

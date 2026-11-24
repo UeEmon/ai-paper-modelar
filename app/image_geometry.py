@@ -76,7 +76,14 @@ def build_model(scene: Scene, height_mm: float):
     if any((b-a)*factor>1000 for a,b in zip(low,high)):
         raise ValueError("Model proportions too extreme")
     lines=["# AI inferred approximate model; units: mm; dimensions are estimates."]
-    lines += ["v %.6f %.6f %.6f" % vertex for vertex in vertices]
+    # Each component has its own vertices, so its colour can ride on them as
+    # OBJ vertex colours ("v x y z r g b"); the net is then printed in colour.
+    vertex_colors=[]
+    for part in scene.components:
+        rgb=tuple(int(part.color[i:i+2],16)/255 for i in (1,3,5))
+        vertex_colors.extend([rgb]*len(primitive(part)[0]))
+    lines += ["v %.6f %.6f %.6f %.4f %.4f %.4f" % (vertex+rgb)
+              for vertex,rgb in zip(vertices,vertex_colors)]
     lines += ["f %d %d %d" % tuple(i+1 for i in face) for face in faces]
     obj="\n".join(lines)+"\n"
     load_mesh(obj.encode(),"image-model.obj")  # reject degenerate/non-manifold output

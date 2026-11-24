@@ -11,7 +11,7 @@ free-form surface fitting, texture baking, or globally optimal net search.
 from __future__ import annotations
 
 from collections import defaultdict
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from heapq import heappop, heappush
 from random import Random
 from math import atan2, cos, floor, hypot, isfinite, sin, sqrt
@@ -38,6 +38,10 @@ class Mesh(NamedTuple):
     faces: list[tuple[int, int, int]]
     source: str
     was_fan_triangulated: bool = False
+    # Per-triangle colour (#rrggbb) from OBJ vertex colours, or None.
+    face_colors: list[str | None] | None = None
+    # Per-triangle OBJ material name from usemtl, or None.
+    face_materials: list[str | None] | None = None
 
 
 @dataclass
@@ -45,6 +49,8 @@ class MeshNet:
     parts: list[dict]
     stats: dict
     warnings: list[str]
+    # Data for the assembly guide page (see mesh_guide.py).
+    guide: dict = field(default_factory=dict)
 
 
 def _number(value: str) -> float:
@@ -76,13 +82,20 @@ def _validate_mesh(mesh: Mesh) -> Mesh:
     return mesh
 
 
+def _hex(rgb) -> str:
+    return "#" + "".join("{:02x}".format(round(min(1., max(0., c)) * 255)) for c in rgb)
+
+
 def parse_obj(data: bytes) -> Mesh:
     try:
         content = data.decode("utf-8-sig", errors="strict")
     except UnicodeError as exc:
         raise MeshError("OBJはUTF-8文字コードで保存してください。", 415) from exc
     vertices: list[tuple[float, float, float]] = []
+    vertex_colors: list[tuple[float, float, float] | None] = []
     faces: list[tuple[int, int, int]] = []
+    face_materials: list[str | None] = []
+    material = None
     fan = False
     for line in content.splitlines():
         tokens = line.strip().split()
@@ -92,8 +105,18 @@ def parse_obj(data: bytes) -> Mesh:
             if len(tokens) < 4:
                 raise MeshError("OBJの頂点行が不正です。")
             vertices.append((_number(tokens[1]), _number(tokens[2]), _number(tokens[3])))
+            # Widely used extension: "v x y z r g b" (0-1, or 0-255).
+            if len(tokens) >= 7:
+                rgb = tuple(_number(t) for t in tokens[4:7])
+                if max(rgb) > 1:
+                    rgb = tuple(c / 255 for c in rgb)
+                vertex_colors.append(rgb)
+            else:
+                vertex_colors.append(None)
             if len(vertices) > MAX_VERTICES:
                 raise MeshError("頂点が20,000を超えました。簡略化してください。", 413)
+        elif tokens[0] == "usemtl":
+            material = " ".join(tokens[1:])[:80] or None
         elif tokens[0] == "f":
             if len(tokens) < 4:
                 raise MeshError("OBJの面には3頂点以上が必要です。")
@@ -114,9 +137,47 @@ def parse_obj(data: bytes) -> Mesh:
                 fan = True
             for i in range(1, len(indices) - 1):
                 faces.append((indices[0], indices[i], indices[i + 1]))
+                face_materials.append(material)
                 if len(faces) > MAX_FACES:
                     raise MeshError("三角形が3,000を超えました。簡略化してください。", 413)
-    return _validate_mesh(Mesh(vertices, faces, "OBJ", fan))
+    face_colors = None
+    if any(vertex_colors):
+        face_colors = []
+        for face in faces:
+            rgbs = [vertex_colors[i] for i in face]
+            if any(c is None for c in rgbs):
+                face_colors.append(None)
+            else:
+                face_colors.append(_hex(tuple(sum(c[k] for c in rgbs) / 3 for k in range(3))))
+    return _validate_mesh(Mesh(vertices, faces, "OBJ", fan, face_colors,
+                               face_materials if any(face_materials) else None))
+
+
+MAX_MTL_BYTES = 256 * 1024
+
+
+def parse_mtl(data: bytes) -> dict[str, str]:
+    """Diffuse colour (Kd) of each material in an OBJ .mtl file, as #rrggbb.
+    Texture maps are not read."""
+    if len(data) > MAX_MTL_BYTES:
+        raise MeshError("材質ファイル（.mtl）は256KB以内にしてください。", 413)
+    try:
+        content = data.decode("utf-8-sig", errors="strict")
+    except UnicodeError as exc:
+        raise MeshError("材質ファイル（.mtl）はUTF-8文字コードで保存してください。", 415) from exc
+    colors: dict[str, str] = {}
+    name = None
+    for line in content.splitlines():
+        tokens = line.strip().split()
+        if not tokens or tokens[0].startswith("#"):
+            continue
+        if tokens[0] == "newmtl":
+            name = " ".join(tokens[1:])[:80] or None
+        elif tokens[0] == "Kd" and name and len(tokens) >= 4:
+            colors[name] = _hex(tuple(_number(t) for t in tokens[1:4]))
+        if len(colors) > 1000:
+            raise MeshError("材質が多すぎます（1,000件まで）。", 413)
+    return colors
 
 
 def parse_stl(data: bytes) -> Mesh:
@@ -301,7 +362,27 @@ def _edge_type(faces, normals, points, edge, adjacent, outward):
     return "mountain" if height < 0 else "valley"
 
 
-def _seam_label(p, q, third, number):
+def _ink(fill: str) -> str:
+    """Number colour that stays readable on the face colour."""
+    r, g, b = (int(fill[i:i + 2], 16) for i in (1, 3, 5))
+    return "#7a2e1f" if 0.299 * r + 0.587 * g + 0.114 * b > 120 else "#fff4d6"
+
+
+def _face_fills(mesh: Mesh, materials: dict[str, str], default: str) -> list[str]:
+    """Material colour (.mtl Kd), else OBJ vertex colour, else the default."""
+    fills = []
+    for fi in range(len(mesh.faces)):
+        name = mesh.face_materials[fi] if mesh.face_materials else None
+        if name in materials:
+            fills.append(materials[name])
+        elif mesh.face_colors and mesh.face_colors[fi]:
+            fills.append(mesh.face_colors[fi])
+        else:
+            fills.append(default)
+    return fills
+
+
+def _seam_label(p, q, third, number, ink="#7a2e1f"):
     """Edge number printed just inside the face, centred on the edge."""
     dx, dy = q[0] - p[0], q[1] - p[1]
     length = hypot(dx, dy)
@@ -314,7 +395,7 @@ def _seam_label(p, q, third, number):
     offset = min(size * .9, inward * .4)
     return {"type": "text", "x": (p[0] + q[0]) / 2 + nx * offset,
             "y": (p[1] + q[1]) / 2 + ny * offset, "text": str(number),
-            "size": round(size, 2), "kind": "detail", "fill": "#7a2e1f",
+            "size": round(size, 2), "kind": "detail", "fill": ink,
             "stroke": "none"}
 
 
@@ -537,7 +618,9 @@ def _tab_coords(p, q, third):
 
 
 def unfold(mesh: Mesh, *, unit: str = "mm", scale: int = 1,
-           glue_tabs: bool = True, color: str = "#e9dfcc") -> MeshNet:
+           glue_tabs: bool = True, color: str = "#e9dfcc",
+           materials: dict[str, str] | None = None,
+           use_colors: bool = True) -> MeshNet:
     if unit not in SOURCE_UNITS:
         raise MeshError("OBJ/STLの元寸法単位をmm・cm・mから選択してください。")
     if not isinstance(scale, int) or not 1 <= scale <= 500:
@@ -622,6 +705,9 @@ def unfold(mesh: Mesh, *, unit: str = "mm", scale: int = 1,
         forest.append(({fi: {v: place(xy) for v, xy in mapping.items()}
                         for fi, mapping in island.coords.items()}, island.folds))
 
+    face_fill = _face_fills(mesh, materials or {}, color) if use_colors else \
+        [color] * len(mesh.faces)
+
     seam_numbers = {}
     for coordinates, folds in forest:
         for fi in coordinates:
@@ -646,7 +732,7 @@ def unfold(mesh: Mesh, *, unit: str = "mm", scale: int = 1,
             grid.add(fi, triangle)
             # Outline each triangle in its own colour so no hairline gap
             # shows between neighbouring triangles of a flat face.
-            graphics.append(_geom_poly(triangle, color, stroke=color))
+            graphics.append(_geom_poly(triangle, face_fill[fi], stroke=face_fill[fi]))
         for fi, mapping in coordinates.items():
             face = mesh.faces[fi]
             for k in range(3):
@@ -669,7 +755,8 @@ def unfold(mesh: Mesh, *, unit: str = "mm", scale: int = 1,
                 # Shared edges not selected as folds become cut-and-glue seams.
                 shared = len(neighbors[edge]) == 2
                 if shared:
-                    label = _seam_label(p, q, third, seam_numbers[edge])
+                    label = _seam_label(p, q, third, seam_numbers[edge],
+                                        _ink(face_fill[fi]))
                     if label is not None:
                         labels.append(label)
                 tab_side = fi == min(neighbors[edge])
@@ -696,7 +783,7 @@ def unfold(mesh: Mesh, *, unit: str = "mm", scale: int = 1,
                 graphics.append(_geom_line(p, q, "cut"))
                 if shared:
                     seam_edges += 1
-        parts.append(_part("Mesh island " + str(piece_idx), graphics + labels))
+        parts.append(_part("Part " + str(piece_idx), graphics + labels))
     warnings = [
         "OBJ/STLの座標には単位が含まれない場合があります。元単位と縮尺を確認してください。",
         "面の重なりを避けるため複数の展開島に分割する場合があります。",
@@ -716,7 +803,27 @@ def unfold(mesh: Mesh, *, unit: str = "mm", scale: int = 1,
         warnings.append("配置衝突により{}回の接続候補を分離しました。".format(refused))
     if too_big:
         warnings.append("1枚の用紙（A4）に収まるよう、大きな部品を分けました。")
+    if use_colors and mesh.face_materials:
+        named = {n for n in mesh.face_materials if n}
+        if not named & set(materials or {}):
+            warnings.append("OBJに材質の指定があります。材質ファイル（.mtl）も選ぶと、その色で印刷できます。")
+        elif named - set(materials or {}):
+            warnings.append("材質ファイルに色（Kd）のない材質がありました。その面は既定の色にしています。")
+
+    piece_of = {fi: index for index, (coordinates, _) in enumerate(forest, 1)
+                for fi in coordinates}
+    guide = {
+        "points": points,
+        "faces": mesh.faces,
+        "fills": face_fill,
+        "piece_of": [piece_of[fi] for fi in range(len(mesh.faces))],
+        "seams": [(number, piece_of[neighbors[edge][0]], piece_of[neighbors[edge][1]])
+                  for edge, number in seam_numbers.items()],
+        "pieces": len(forest),
+        "oriented": oriented,
+    }
     return MeshNet(
+        guide=guide,
         parts=parts,
         stats={
             "format": mesh.source, "vertices": len(mesh.vertices),
@@ -727,6 +834,7 @@ def unfold(mesh: Mesh, *, unit: str = "mm", scale: int = 1,
             "flat_edges_hidden": hidden_flat,
             "seams": len(seam_numbers), "oriented": oriented,
             "merged_islands": merged,
+            "colored": len(set(face_fill)) > 1 or face_fill[0] != color,
             "open_edges": open_edges,
             "size_mm": [round(d, 3) for d in dimensions],
         },

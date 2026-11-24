@@ -129,13 +129,18 @@ def test_import_api_pdf_svg_and_delete_job():
     assert res.status_code == 201, res.text
     data = res.json()
     assert data["stats"]["triangles"] == 4
-    assert data["pages"] >= 1
+    assert data["pages"] >= 2
     jid = data["id"]
     assert client.get("/api/mesh/jobs/" + jid).status_code == 200
-    svg = client.get("/api/mesh/jobs/" + jid + "/pages/0.svg")
+    guide = client.get("/api/mesh/jobs/" + jid + "/pages/0.svg")
+    assert guide.status_code == 200
+    ET.fromstring(guide.text)
+    assert 'data-page="assembly-guide"' in guide.text
+    svg = client.get("/api/mesh/jobs/" + jid + "/pages/1.svg")
     assert svg.status_code == 200
     assert svg.headers["content-type"].startswith("image/svg+xml")
     ET.fromstring(svg.text)
+    assert "Page 2/" in svg.text
     assert 'data-layer="cut"' in svg.text
     assert 'data-layer="fold"' in svg.text
     assert "50 mm CHECK" in svg.text
