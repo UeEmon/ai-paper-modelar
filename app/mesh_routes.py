@@ -15,12 +15,14 @@ from pydantic import BaseModel, Field, ValidationError
 
 from .retention import save_output
 from .generator import ModelSpec, page_jobs, render_pdf, render_svg
-from .mesh_unfolder import MAX_MESH_BYTES, MeshError, load_mesh, unfold
+from . import mesh_guide
+from .mesh_unfolder import MAX_MESH_BYTES, MeshError, load_mesh, parse_mtl, unfold
 
 router = APIRouter(prefix="/api/mesh", tags=["mesh"])
 
 SESSION_TTL = 3600
 MAX_JOBS = 8
+MAX_MTL_READ = 256 * 1024 + 1
 _jobs: dict[str, "MeshJob"] = {}
 
 
@@ -34,6 +36,8 @@ class MeshJob:
     pages: int
     stats: dict
     warnings: list[str]
+    # Drawing of the assembly guide, printed as page 1 before the part sheets.
+    guide: list[dict] | None = None
 
     def public(self) -> dict:
         return {
@@ -63,6 +67,8 @@ async def create_job(
     source_unit: str = Form("mm"),
     scale: int = Form(1),
     glue_tabs: bool = Form(True),
+    materials: UploadFile | None = File(None),
+    use_colors: bool = Form(True),
 ):
     _prune()
     if len(_jobs) >= MAX_JOBS:
@@ -74,14 +80,32 @@ async def create_job(
     try:
         filename = (file.filename or "").replace("\\", "/").rsplit("/", 1)[-1]
         mesh = load_mesh(data, filename)
-        net = unfold(mesh, unit=source_unit, scale=scale, glue_tabs=glue_tabs)
+        colors = {}
+        if materials is not None and materials.filename:
+            try:
+                raw_mtl = await materials.read(MAX_MTL_READ)
+            finally:
+                await materials.close()
+            colors = parse_mtl(raw_mtl)
+        net = unfold(mesh, unit=source_unit, scale=scale, glue_tabs=glue_tabs,
+                     materials=colors, use_colors=use_colors)
         spec = ModelSpec(
             name=filename[:80],
             scale=scale, template="box",
             width_m=0.05, depth_m=0.05, height_m=0.05,
             roof="flat", pitch_deg=0,
         )
-        pages = len(page_jobs(spec, net.parts))
+        sheets = page_jobs(spec, net.parts)
+        pages = len(sheets) + 1
+        part_pages: dict[int, list[int]] = {}
+        for index, sheet in enumerate(sheets, 2):
+            for place in sheet["placements"]:
+                number = int(place["part"]["name"].split()[-1])
+                if index not in part_pages.setdefault(number, []):
+                    part_pages[number].append(index)
+        guide = mesh_guide.build_page(
+            net.guide, name=filename[:80], scale=scale, size_mm=net.stats["size_mm"],
+            z_up=mesh.source == "STL", part_pages=part_pages, total_pages=pages)
     except MeshError as exc:
         raise HTTPException(exc.code, str(exc)) from exc
     except (ValueError, ValidationError) as exc:
@@ -90,7 +114,7 @@ async def create_job(
     item = MeshJob(
         job_id, time.time(), filename, spec, net.parts, pages,
         {**net.stats, "scale": scale, "source_unit": source_unit},
-        net.warnings,
+        net.warnings, guide,
     )
     _jobs[job_id] = item
     return item.public()
@@ -106,7 +130,10 @@ def svg(job_id: str, page: int):
     item = _job(job_id)
     if not 0 <= page < item.pages:
         raise HTTPException(404, "該当するページはありません。")
-    rendered = render_svg(item.spec, page, parts=item.parts)
+    if page == 0 and item.guide is not None:
+        rendered = mesh_guide.to_svg(item.guide)
+    else:
+        rendered = render_svg(item.spec, page - 1, parts=item.parts, page_offset=1)
     save_output(rendered, "svg")
     return Response(
         rendered,
@@ -118,7 +145,8 @@ def svg(job_id: str, page: int):
 @router.get("/jobs/{job_id}/template.pdf")
 def pdf(job_id: str):
     item = _job(job_id)
-    rendered = render_pdf(item.spec, parts=item.parts)
+    rendered = render_pdf(item.spec, parts=item.parts, page_offset=1,
+                          cover=lambda c: mesh_guide.draw_pdf(c, item.guide))
     save_output(rendered, "pdf")
     return Response(
         rendered,

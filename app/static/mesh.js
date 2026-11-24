@@ -33,6 +33,7 @@
          (stats.oriented ? " ｜ 山折り " + stats.mountain_folds +
            " ・谷折り " + stats.valley_folds : "") +
          (stats.seams !== undefined ? " ｜ 貼り合わせ番号 " + stats.seams : "") +
+         (stats.colored ? " ｜ 色付き" : "") +
          " ｜ A4 " + job.pages + "ページ");
     note("模型サイズ（mm）： " + stats.size_mm.join(" × ") +
          " ／ 縮尺 1/" + stats.scale +
@@ -44,7 +45,8 @@
     if (!job) return;
     byId("meshPreview").src =
       "/api/mesh/jobs/" + encodeURIComponent(job.id) + "/pages/" + pageIndex + ".svg";
-    byId("meshPageCount").textContent = (pageIndex + 1) + " / " + job.pages;
+    byId("meshPageCount").textContent = (pageIndex + 1) + " / " + job.pages +
+      (pageIndex === 0 ? "（組み立て説明）" : "");
     byId("meshPrevious").disabled = pageIndex <= 0;
     byId("meshNext").disabled = pageIndex + 1 >= job.pages;
     byId("meshViewer").hidden = false;
@@ -69,6 +71,13 @@
       payload.append("source_unit", byId("meshUnit").value);
       payload.append("scale", byId("meshScale").value);
       payload.append("glue_tabs", String(byId("meshTabs").checked));
+      payload.append("use_colors", String(byId("meshColors").checked));
+      const materials = byId("meshMaterials").files[0];
+      // A .mtl only belongs to the OBJ the user picked, not to a reused file.
+      if (materials && !(fileOverride instanceof File) && /\.obj$/i.test(file.name)) {
+        if (materials.size > 256 * 1024) throw new Error("材質ファイル（.mtl）は256KB以内にしてください。");
+        payload.append("materials", materials);
+      }
       const response = await fetch("/api/mesh/jobs", {method:"POST",body:payload});
       if (!response.ok) throw new Error(await getError(response));
       job = await response.json();

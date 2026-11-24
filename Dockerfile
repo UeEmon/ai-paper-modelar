@@ -1,6 +1,10 @@
 FROM python:3.12-slim
 WORKDIR /workspace
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
+# Japanese font embedded in the assembly guide page of mesh PDFs.
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends fonts-ipaexfont-gothic \
+ && rm -rf /var/lib/apt/lists/*
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt \
  && useradd --system --uid 10001 --no-create-home app \

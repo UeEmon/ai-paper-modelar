@@ -341,7 +341,8 @@ def _svg_graphic(g: dict) -> str:
     return '<polygon points="' + points + '" fill="' + fill + '"' + s + '/>'
 
 
-def render_svg(spec: ModelSpec, page: int = 0, *, parts: list[dict] | None = None) -> str:
+def render_svg(spec: ModelSpec, page: int = 0, *, parts: list[dict] | None = None,
+               page_offset: int = 0) -> str:
     pages = page_jobs(spec, parts)
     if page < 0 or page >= len(pages):
         raise IndexError("Page not found")
@@ -354,7 +355,8 @@ def render_svg(spec: ModelSpec, page: int = 0, *, parts: list[dict] | None = Non
         '<rect width="210" height="297" fill="white"/>',
         '<text x="12" y="17" font-family="sans-serif" font-size="4.3">' + label + '</text>',
         '<text x="198" y="23" font-family="sans-serif" text-anchor="end" '
-        'font-size="3">Page {}/{}</text>'.format(page + 1, len(pages)),
+        'font-size="3">Page {}/{}</text>'.format(page + 1 + page_offset,
+                                                 len(pages) + page_offset),
         '<defs>',
     ]
     for i, place in enumerate(pieces):
@@ -435,10 +437,14 @@ def _pdf_graphic(c: canvas.Canvas, g: dict, shift_x: float, shift_y: float) -> N
     c.setDash()
 
 
-def render_pdf(spec: ModelSpec, *, parts: list[dict] | None = None) -> bytes:
+def render_pdf(spec: ModelSpec, *, parts: list[dict] | None = None,
+               cover=None, page_offset: int = 0) -> bytes:
+    """cover(canvas), if given, draws extra leading pages (page_offset of them)."""
     output = BytesIO()
     c = canvas.Canvas(output, pagesize=A4)
     pages = page_jobs(spec, parts)
+    if cover is not None:
+        cover(c)
     for index, page in enumerate(pages):
         c.setFont("Helvetica", 11)
         c.drawString(12 * mm, (PAGE_H - 17) * mm,
@@ -446,7 +452,8 @@ def render_pdf(spec: ModelSpec, *, parts: list[dict] | None = None) -> bytes:
                      + " | 1/" + str(spec.scale))
         c.setFont("Helvetica", 8)
         c.drawRightString(198 * mm, (PAGE_H - 23) * mm,
-                          "Page " + str(index + 1) + "/" + str(len(pages)))
+                          "Page " + str(index + 1 + page_offset) + "/" +
+                          str(len(pages) + page_offset))
         for place in page["placements"]:
             c.saveState()
             p = c.beginPath()

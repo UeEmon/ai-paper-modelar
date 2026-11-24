@@ -150,15 +150,18 @@
   <div><p class="eyebrow">3D MESH UNFOLDING</p><h2>④ 3Dモデルから展開図を作る</h2></div>
   <span class="status">OBJ / STL</span>
 </div>
-<p class="lead">手持ちのOBJ・STLモデルを三角形に展開し、切断線・折線・接着タブ付きのA4用紙に配置します。</p>
+<p class="lead">手持ちのOBJ・STLモデルを三角形に展開し、切断線・山折り/谷折り線・貼り合わせ番号・接着タブ付きのA4用紙に配置します。1ページ目は部品番号と組み立て順の説明です。</p>
 <label for="meshFile">3Dモデルファイル（最大5MB、三角形3,000面以内）</label>
 <input id="meshFile" type="file" accept=".obj,.stl,model/stl">
+<label for="meshMaterials">材質ファイル（.mtl、任意・OBJの色を使うとき）</label>
+<input id="meshMaterials" type="file" accept=".mtl">
 <div class="meshFields">
 <div><label for="meshUnit">モデル座標の単位</label>
 <select id="meshUnit"><option value="mm">mm</option><option value="cm">cm</option><option value="m">m</option></select></div>
 <div><label for="meshScale">縮尺 1/X</label><input id="meshScale" type="number" min="1" max="500" step="1" value="1"></div>
 </div>
 <label class="meshCheck"><input type="checkbox" id="meshTabs" checked>接着タブを追加する</label>
+<label class="meshCheck"><input type="checkbox" id="meshColors" checked>モデルの色で塗る（OBJの材質色・頂点色）</label>
 <label class="meshCheck"><input type="checkbox" id="meshSaveOriginal">選択中の一時作業でOBJ/STLを再利用する（メモリのみ）</label>
 <button class="mainbutton" id="meshGenerate">OBJ/STLを読み込んで展開</button>
 <div id="meshResults" class="meshResults" aria-live="polite"></div>
