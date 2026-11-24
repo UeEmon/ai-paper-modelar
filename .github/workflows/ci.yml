@@ -1,6 +1,8 @@
 # テストを PR ごとに行い、main とタグ v* ではイメージを ghcr.io に置く。
 #   main への push   → ghcr.io/ueemon/ai-paper-modelar:main と :main-<コミット>
-#   タグ v1.2.3 の push → :1.2.3 と :stable（Oracle Cloud の papercraft-1 が使う）
+#                      続けて release ジョブが版 v<VERSION>.<連番> のタグを付け、
+#                      同じイメージに :<版> と :stable を付ける（本番が使う。自動で反映）
+#   タグ v1.2.3 の手動 push → :1.2.3 と :stable
 name: CI
 on:
   push:
@@ -112,3 +114,54 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+
+  # main に入るたびに、版のタグを付けて本番用の :stable にする。
+  # 版の上2桁は VERSION ファイル（例 0.2）、最後の桁はそのたびに1ずつ増える。
+  # GITHUB_TOKEN で付けたタグでは CI が動かないので、イメージはここで付け替える
+  # （作り直さず、image ジョブが置いた :main-<コミット> と同じものを指す）。
+  release:
+    needs: image
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      packages: write
+    env:
+      IMAGE: ghcr.io/ueemon/ai-paper-modelar
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - id: version
+        run: |
+          base=$(tr -d ' \n' < VERSION)
+          if ! echo "$base" | grep -Eq '^[0-9]+\.[0-9]+$'; then
+            echo "VERSION は 0.2 のように「数字.数字」で書いてください: $base" >&2
+            exit 1
+          fi
+          already=$(git tag --points-at "$GITHUB_SHA" --list 'v*' | head -n1)
+          if [ -n "$already" ]; then
+            echo "このコミットにはもう $already が付いています。" >&2
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          last=$(git tag --list "v${base}.*" --sort=-v:refname | head -n1)
+          if [ -z "$last" ]; then next="${base}.0"; else next="${base}.$(( ${last##*.} + 1 ))"; fi
+          echo "version=$next" >> "$GITHUB_OUTPUT"
+      - if: steps.version.outputs.skip != 'true'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - if: steps.version.outputs.skip != 'true'
+        uses: docker/setup-buildx-action@v3
+      - if: steps.version.outputs.skip != 'true'
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          docker buildx imagetools create \
+            -t "$IMAGE:$VERSION" -t "$IMAGE:stable" "$IMAGE:main-${GITHUB_SHA::7}"
+          git tag "v$VERSION" "$GITHUB_SHA"
+          git push origin "v$VERSION"
+          echo "v$VERSION を付け、:stable にしました。" >> "$GITHUB_STEP_SUMMARY"

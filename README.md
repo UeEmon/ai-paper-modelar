@@ -212,6 +212,7 @@ SenroLab（Nゲージのレイアウト設計アプリ）の「再現してみ�
 - 環境変数 `PAPERCRAFT_API_TOKEN` を設定すると `Authorization: Bearer <トークン>` を確かめます（SenroLab 側も同じ値）。
 - `GET /health` で死活確認。
 - イメージは CI が ghcr.io/ueemon/ai-paper-modelar に置きます（arm64）。main は `:main`、タグ `v*` は `:<版>` と `:stable`。
+- main に入るたびに CI がタグ `v<VERSION>.<連番>`（例 v0.2.0、v0.2.1…）を自動で付け、同じイメージを `:<版>` と `:stable` にします。本番は `:stable` を自動更新で取り込むので、マージがそのまま本番に出ます。上2桁を上げるときは `VERSION`（例 `0.2`→`0.3`）を書き換えます。
 
 ## テスト
 
