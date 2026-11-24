@@ -159,7 +159,7 @@ def test_mesh_api_rejects_invalid_unit_scale_and_upload_size():
 def test_import_many_faces_rejected_and_escaping():
     face = b"v 0 0 0\nv 10 0 0\nv 0 10 0\n"
     # Duplicate triangles are nonphysical but enough to check the vertex bound.
-    dense = face + b"f 1 2 3\n"*501
+    dense = face + b"f 1 2 3\n"*3001
     assert submit_mesh(dense).status_code == 413
     r = submit_mesh(filename="A & <B>.obj")
     assert r.status_code == 201, r.text

@@ -313,10 +313,23 @@ def summary(spec: ModelSpec) -> dict:
     }
 
 
+FOLD_DASH = {"mountain": (3, .8, .6, .8), "valley": (2, 1), None: (2, 1)}
+FOLD_STROKE = {"mountain": "#a8321f", "valley": "#1f56a8"}
+
+
 def _svg_graphic(g: dict) -> str:
-    s = ' stroke="' + g["stroke"] + '" stroke-width="0.25" data-layer="' + g["kind"] + '"'
+    if g["type"] == "text":
+        return ('<text x="{:.3f}" y="{:.3f}" font-family="sans-serif" font-size="{}" '
+                'text-anchor="middle" dominant-baseline="central" fill="{}" '
+                'data-layer="seam-number">{}</text>').format(
+                    g["x"], g["y"], g["size"], g["fill"], escape(g["text"]))
+    fold_type = g.get("fold_type") if g["kind"] == "fold" else None
+    stroke = FOLD_STROKE.get(fold_type, g["stroke"])
+    s = ' stroke="' + stroke + '" stroke-width="0.25" data-layer="' + g["kind"] + '"'
     if g["kind"] == "fold":
-        s += ' stroke-dasharray="2,1"'
+        s += ' stroke-dasharray="' + ",".join(str(v) for v in FOLD_DASH[fold_type]) + '"'
+        if fold_type:
+            s += ' data-fold="' + fold_type + '"'
     fill = g.get("fill", "none")
     if g["type"] == "rect":
         return ('<rect x="{x}" y="{y}" width="{w}" height="{h}" fill="{fill}"'.format(
@@ -353,8 +366,10 @@ def render_svg(spec: ModelSpec, page: int = 0, *, parts: list[dict] | None = Non
         dx = place["dst_x"] - place["src_x"]
         dy = place["dst_y"] - place["src_y"]
         graphics = "".join(_svg_graphic(g) for g in place["part"]["graphics"])
-        output.append('<g clip-path="url(#piece{})" transform="translate({},{})">'
-                      '{}</g>'.format(i, dx, dy, graphics))
+        # The clip window is in page coordinates, so it must sit outside the
+        # translated group; inside it the clip would move with the part.
+        output.append('<g clip-path="url(#piece{})"><g transform="translate({},{})">'
+                      '{}</g></g>'.format(i, dx, dy, graphics))
         tx, ty, nx, ny = place["tile"]
         part_label = place["part"]["name"]
         if nx > 1 or ny > 1:
@@ -370,16 +385,29 @@ def render_svg(spec: ModelSpec, page: int = 0, *, parts: list[dict] | None = Non
         '<line x1="14" y1="276" x2="14" y2="280" stroke="black" stroke-width=".3"/>',
         '<line x1="64" y1="276" x2="64" y2="280" stroke="black" stroke-width=".3"/>',
         '<text x="14" y="284" font-size="3.2">50 mm CHECK - PRINT AT 100%</text>',
-        '<text x="14" y="290" font-size="2.8">Solid: cut | Dashed: fold | A4</text>',
+        '<text x="14" y="290" font-size="2.8">Solid: cut | Dashed: fold (blue: valley) | '
+        'Dash-dot red: mountain fold | Same number: glue together | A4</text>',
         '</svg>',
     ])
     return "".join(output)
 
 def _pdf_graphic(c: canvas.Canvas, g: dict, shift_x: float, shift_y: float) -> None:
+    if g["type"] == "text":
+        c.setFillColor(HexColor(g["fill"]))
+        c.setFont("Helvetica", g["size"] / 0.3528)
+        c.drawCentredString((g["x"] + shift_x) * mm,
+                            (PAGE_H - g["y"] - shift_y - g["size"] * .35) * mm,
+                            g["text"])
+        return
+    fold_type = g.get("fold_type") if g["kind"] == "fold" else None
     stroke_enabled = g["stroke"] != "none"
-    c.setStrokeColor(HexColor(g["stroke"] if stroke_enabled else "#333333"))
+    stroke = FOLD_STROKE.get(fold_type, g["stroke"])
+    c.setStrokeColor(HexColor(stroke if stroke_enabled else "#333333"))
     c.setLineWidth(0.25 * mm)
-    c.setDash(2 * mm, 1 * mm) if g["kind"] == "fold" else c.setDash()
+    if g["kind"] == "fold":
+        c.setDash([v * mm for v in FOLD_DASH[fold_type]])
+    else:
+        c.setDash()
     fill = g.get("fill", "none")
     if fill != "none":
         c.setFillColor(HexColor(fill))
@@ -451,7 +479,8 @@ def render_pdf(spec: ModelSpec, *, parts: list[dict] | None = None) -> bytes:
         c.drawString(14 * mm, (PAGE_H - 284) * mm,
                      "50 mm CHECK - PRINT AT 100%")
         c.drawString(14 * mm, (PAGE_H - 290) * mm,
-                     "Solid = cut / Dashed = fold / A4")
+                     "Solid = cut / Dashed = fold (blue: valley) / Dash-dot red = mountain fold"
+                     " / Same number = glue together / A4")
         c.showPage()
     c.save()
     return output.getvalue()

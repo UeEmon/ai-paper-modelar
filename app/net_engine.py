@@ -36,6 +36,8 @@ def _coordinates(graphic: Graphic):
     if graphic["type"] == "line":
         return [(graphic["x1"], graphic["y1"]),
                 (graphic["x2"], graphic["y2"])]
+    if graphic["type"] == "text":
+        return [(graphic["x"], graphic["y"])]
     if graphic["type"] == "rect":
         return [(graphic["x"], graphic["y"]),
                 (graphic["x"] + graphic["w"], graphic["y"] + graphic["h"])]

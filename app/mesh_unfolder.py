@@ -10,9 +10,11 @@ free-form surface fitting, texture baking, or globally optimal net search.
 """
 from __future__ import annotations
 
-from collections import defaultdict, deque
+from collections import defaultdict
 from dataclasses import dataclass
-from math import hypot, isfinite, sqrt
+from heapq import heappop, heappush
+from random import Random
+from math import atan2, cos, floor, hypot, isfinite, sin, sqrt
 from struct import unpack_from
 from typing import NamedTuple
 
@@ -20,7 +22,7 @@ from .net_engine import _part
 
 MAX_MESH_BYTES = 5 * 1024 * 1024
 MAX_VERTICES = 20000
-MAX_FACES = 500
+MAX_FACES = 3000
 SOURCE_UNITS = {"mm": 1.0, "cm": 10.0, "m": 1000.0}
 EPS = 1e-9
 
@@ -59,7 +61,7 @@ def _validate_mesh(mesh: Mesh) -> Mesh:
     if not mesh.vertices or not mesh.faces:
         raise MeshError("頂点または三角形のデータがありません。")
     if len(mesh.vertices) > MAX_VERTICES or len(mesh.faces) > MAX_FACES:
-        raise MeshError("モデルが複雑すぎます。頂点20,000・三角形500以下へ簡略化してください。", 413)
+        raise MeshError("モデルが複雑すぎます。頂点20,000・三角形3,000以下へ簡略化してください。", 413)
     for face in mesh.faces:
         if len(set(face)) != 3 or any(i < 0 or i >= len(mesh.vertices) for i in face):
             raise MeshError("無効な三角形（頂点の重複・範囲外参照）があります。")
@@ -113,7 +115,7 @@ def parse_obj(data: bytes) -> Mesh:
             for i in range(1, len(indices) - 1):
                 faces.append((indices[0], indices[i], indices[i + 1]))
                 if len(faces) > MAX_FACES:
-                    raise MeshError("三角形が500を超えました。簡略化してください。", 413)
+                    raise MeshError("三角形が3,000を超えました。簡略化してください。", 413)
     return _validate_mesh(Mesh(vertices, faces, "OBJ", fan))
 
 
@@ -138,7 +140,7 @@ def parse_stl(data: bytes) -> Mesh:
     if binary:
         count = unpack_from("<I", data, 80)[0]
         if count > MAX_FACES:
-            raise MeshError("三角形が500を超えました。簡略化してください。", 413)
+            raise MeshError("三角形が3,000を超えました。簡略化してください。", 413)
         for i in range(count):
             position = 84 + i * 50
             values = unpack_from("<12f", data, position)
@@ -159,7 +161,7 @@ def parse_stl(data: bytes) -> Mesh:
                     faces.append(tuple(group))
                     group = []
                     if len(faces) > MAX_FACES:
-                        raise MeshError("三角形が500を超えました。簡略化してください。", 413)
+                        raise MeshError("三角形が3,000を超えました。簡略化してください。", 413)
         if group:
             raise MeshError("ASCII STLの三角形データが不完全です。")
     return _validate_mesh(Mesh(vertices, faces, "STL"))
@@ -249,6 +251,262 @@ def _across(face, parent_face, parent_xy, points, common):
     return {u: p, v: q, w: new}
 
 
+FLAT_COS = 0.99995  # about 0.6 degrees between neighbouring normals
+
+
+def _sub3(a, b):
+    return (a[0] - b[0], a[1] - b[1], a[2] - b[2])
+
+
+def _cross3(a, b):
+    return (a[1] * b[2] - a[2] * b[1],
+            a[2] * b[0] - a[0] * b[2],
+            a[0] * b[1] - a[1] * b[0])
+
+
+def _dot(a, b):
+    return a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
+
+
+def _normal(face, points):
+    a, b, c = (points[i] for i in face)
+    n = _cross3(_sub3(b, a), _sub3(c, a))
+    length = sqrt(_dot(n, n))
+    return (n[0] / length, n[1] / length, n[2] / length) if length > EPS else (0., 0., 0.)
+
+
+def _opposite_winding(face_a, face_b, edge):
+    """True when the two triangles walk their shared edge in opposite directions."""
+    def direction(face):
+        for k in range(3):
+            if (face[k], face[(k + 1) % 3]) == edge:
+                return 1
+            if (face[(k + 1) % 3], face[k]) == edge:
+                return -1
+        return 0
+    return direction(face_a) * direction(face_b) == -1
+
+
+def _edge_type(faces, normals, points, edge, adjacent, outward):
+    """flat, mountain or valley (seen from the printed outside), or fold if unknown."""
+    a, b = adjacent
+    if abs(_dot(normals[a], normals[b])) >= FLAT_COS:
+        return "flat"
+    if outward is None:
+        return "fold"
+    other = next(i for i in faces[b] if i not in edge)
+    n = normals[a]
+    height = _dot((n[0] * outward, n[1] * outward, n[2] * outward),
+                  _sub3(points[other], points[edge[0]]))
+    return "mountain" if height < 0 else "valley"
+
+
+def _seam_label(p, q, third, number):
+    """Edge number printed just inside the face, centred on the edge."""
+    dx, dy = q[0] - p[0], q[1] - p[1]
+    length = hypot(dx, dy)
+    if length < 1.5:
+        return None
+    inward = abs(_cross2(p, q, third)) / length
+    size = max(1.2, min(2.8, length * .3, inward * .45))
+    sign = 1 if _cross2(p, q, third) > 0 else -1
+    nx, ny = -dy / length * sign, dx / length * sign
+    offset = min(size * .9, inward * .4)
+    return {"type": "text", "x": (p[0] + q[0]) / 2 + nx * offset,
+            "y": (p[1] + q[1]) / 2 + ny * offset, "text": str(number),
+            "size": round(size, 2), "kind": "detail", "fill": "#7a2e1f",
+            "stroke": "none"}
+
+
+# A piece must fit the printable area of one A4 sheet (186 x 225 mm, less the
+# 6 mm border on each side) with room left for glue tabs around it.
+ISLAND_MAX_LONG = 205.0
+ISLAND_MAX_SHORT = 166.0
+
+
+class _Grid:
+    """Uniform grid of triangles, so an overlap test looks only nearby."""
+
+    def __init__(self, cell: float):
+        self.cell = cell
+        self.cells = defaultdict(list)
+        self.shapes = {}
+
+    def _keys(self, pts):
+        c = self.cell
+        xs = [p[0] for p in pts]
+        ys = [p[1] for p in pts]
+        for i in range(floor(min(xs) / c), floor(max(xs) / c) + 1):
+            for j in range(floor(min(ys) / c), floor(max(ys) / c) + 1):
+                yield (i, j)
+
+    def add(self, key, triangle):
+        self.shapes[key] = triangle
+        for cell in self._keys(triangle):
+            self.cells[cell].append(key)
+
+    def hits(self, polygon, ignore=None) -> bool:
+        seen = set()
+        for cell in self._keys(polygon):
+            for key in self.cells.get(cell, ()):
+                if key in seen or key == ignore:
+                    continue
+                seen.add(key)
+                if _intersection_area(polygon, self.shapes[key]) > 1e-5:
+                    return True
+        return False
+
+
+class _Island:
+    def __init__(self, cell: float):
+        self.coords = {}
+        self.folds = set()
+        self.grid = _Grid(cell)
+        self.bbox = None
+
+    def fits_with(self, pts) -> bool:
+        x0, y0, x1, y1 = self.bbox
+        x0 = min([x0] + [p[0] for p in pts])
+        x1 = max([x1] + [p[0] for p in pts])
+        y0 = min([y0] + [p[1] for p in pts])
+        y1 = max([y1] + [p[1] for p in pts])
+        w, h = x1 - x0, y1 - y0
+        return max(w, h) <= ISLAND_MAX_LONG and min(w, h) <= ISLAND_MAX_SHORT
+
+    def add(self, fi, mapping, faces):
+        triangle = [mapping[v] for v in faces[fi]]
+        self.coords[fi] = mapping
+        self.grid.add(fi, triangle)
+        xs = [p[0] for p in triangle]
+        ys = [p[1] for p in triangle]
+        if self.bbox is None:
+            self.bbox = (min(xs), min(ys), max(xs), max(ys))
+        else:
+            x0, y0, x1, y1 = self.bbox
+            self.bbox = (min([x0] + xs), min([y0] + ys),
+                         max([x1] + xs), max([y1] + ys))
+
+
+def _grow(faces, points, neighbors, bend, cell, order):
+    """Unfold every triangle into islands, growing each from a root along the
+    gentlest bends. A triangle that would overlap its island, or make it too
+    large for one sheet, is left for another island."""
+    placed_faces = set()
+    islands = []
+    refused = 0
+    too_big = 0
+    counter = 0
+    roots = iter(order)
+    while len(placed_faces) < len(faces):
+        root_id = next(i for i in roots if i not in placed_faces)
+        island = _Island(cell)
+        island.add(root_id, _root(faces[root_id], points), faces)
+        placed_faces.add(root_id)
+        heap = []
+
+        def push(parent):
+            nonlocal counter
+            pface = faces[parent]
+            for k in range(3):
+                edge = tuple(sorted((pface[k], pface[(k + 1) % 3])))
+                adjacent = neighbors[edge]
+                if len(adjacent) != 2:
+                    continue
+                nxt = adjacent[0] if adjacent[1] == parent else adjacent[1]
+                if nxt in placed_faces:
+                    continue
+                counter += 1
+                heappush(heap, (bend(edge), counter, parent, nxt, edge))
+
+        push(root_id)
+        while heap:
+            _, _, parent, nxt, edge = heappop(heap)
+            if nxt in placed_faces:
+                continue
+            triangle = _across(faces[nxt], faces[parent],
+                               island.coords[parent], points, edge)
+            coords = [triangle[index] for index in faces[nxt]]
+            if not island.fits_with(coords):
+                too_big += 1
+                continue
+            # Use strict positive-area overlap, allowing shared edges.
+            if island.grid.hits(coords):
+                refused += 1
+                continue
+            island.add(nxt, triangle, faces)
+            placed_faces.add(nxt)
+            island.folds.add(edge)
+            push(nxt)
+        islands.append(island)
+    return islands, refused, too_big
+
+
+def _merge_islands(islands, faces, neighbors, bend) -> int:
+    """Glue small pieces onto a neighbouring piece where they fit without
+    overlapping, smallest first, turning the seam between them into a fold."""
+    owner = {fi: island for island in islands for fi in island.coords}
+    merged = 0
+    changed = True
+    while changed:
+        changed = False
+        for small in sorted((i for i in islands if i.coords), key=lambda i: len(i.coords)):
+            if not small.coords:
+                continue
+            candidates = []
+            for fi in small.coords:
+                face = faces[fi]
+                for k in range(3):
+                    edge = tuple(sorted((face[k], face[(k + 1) % 3])))
+                    if len(neighbors[edge]) != 2:
+                        continue
+                    other = neighbors[edge][0] if neighbors[edge][1] == fi else neighbors[edge][1]
+                    if owner[other] is not small:
+                        candidates.append((bend(edge), edge, fi, other))
+            candidates.sort(key=lambda c: c[0])
+            for _, edge, fi, other in candidates:
+                big = owner[other]
+                moved = _attach(small, big, edge, fi, other, faces)
+                if moved is None:
+                    continue
+                for face_id, mapping in moved.items():
+                    big.add(face_id, mapping, faces)
+                    owner[face_id] = big
+                big.folds |= small.folds | {edge}
+                small.coords = {}
+                merged += 1
+                changed = True
+                break
+    return merged
+
+
+def _attach(small, big, edge, fi, other, faces):
+    """small moved rigidly so its edge meets big's copy, or None if it would
+    flip over, overlap big, or make big too large for one sheet."""
+    u, v = edge
+    p, q = small.coords[fi][u], small.coords[fi][v]
+    P, Q = big.coords[other][u], big.coords[other][v]
+    turn = atan2(Q[1] - P[1], Q[0] - P[0]) - atan2(q[1] - p[1], q[0] - p[0])
+    c, s = cos(turn), sin(turn)
+
+    def move(point):
+        x, y = point[0] - p[0], point[1] - p[1]
+        return (P[0] + c * x - s * y, P[1] + s * x + c * y)
+
+    third_small = move(small.coords[fi][next(i for i in faces[fi] if i not in edge)])
+    third_big = big.coords[other][next(i for i in faces[other] if i not in edge)]
+    if _cross2(P, Q, third_small) * _cross2(P, Q, third_big) >= 0:
+        return None
+    moved = {face_id: {vertex: move(xy) for vertex, xy in mapping.items()}
+             for face_id, mapping in small.coords.items()}
+    every = [xy for mapping in moved.values() for xy in mapping.values()]
+    if not big.fits_with(every):
+        return None
+    for face_id, mapping in moved.items():
+        if big.grid.hits([mapping[vertex] for vertex in faces[face_id]]):
+            return None
+    return moved
+
+
 def _geom_line(p, q, kind, color="#333333"):
     return {"type": "line", "x1": p[0], "y1": p[1],
             "x2": q[0], "y2": q[1],
@@ -302,54 +560,93 @@ def unfold(mesh: Mesh, *, unit: str = "mm", scale: int = 1,
             if len(neighbors[edge]) > 2:
                 raise MeshError("3面以上が共有する辺があります。非多様体メッシュを修復してください。")
     open_edges = sum(len(indices) == 1 for indices in neighbors.values())
-    placed_faces = set()
-    forest = []
-    refused = 0
-    fold_edges = set()
+    normals = [_normal(face, points) for face in mesh.faces]
+    # Mountain/valley folds need a trustworthy outside. Only a closed mesh
+    # whose triangles all wind the same way gives one.
+    consistent = all(_opposite_winding(mesh.faces[a], mesh.faces[b], edge)
+                     for edge, (a, b) in ((e, f) for e, f in neighbors.items()
+                                          if len(f) == 2))
+    oriented = consistent and not open_edges
+    volume = sum(_dot(points[f[0]], _cross3(points[f[1]], points[f[2]]))
+                 for f in mesh.faces)
+    outward = 1.0 if volume >= 0 else -1.0
+    edge_type = {}
+    for edge, adjacent in neighbors.items():
+        if len(adjacent) == 2:
+            edge_type[edge] = _edge_type(mesh.faces, normals, points, edge,
+                                         adjacent, outward if oriented else None)
 
-    # Start a fresh island for any triangle whose overlap-free connection is
-    # unavailable. This guarantees every input triangle is represented.
-    while len(placed_faces) < len(mesh.faces):
-        root_id = next(i for i in range(len(mesh.faces)) if i not in placed_faces)
-        coordinates = {root_id: _root(mesh.faces[root_id], points)}
-        placed_faces.add(root_id)
-        queue = deque([root_id])
-        folds = set()
-        while queue:
-            parent = queue.popleft()
-            pface = mesh.faces[parent]
+    lengths = [_dist3(points[e[0]], points[e[1]]) for e in neighbors]
+    cell = max(1.0, sum(lengths) / len(lengths))
+    def bend(edge):
+        """Gentlest bends first: flat joins, then shallow folds, so a flat
+        polygon stays whole and a curved band (a cylinder side) one strip."""
+        a, b = neighbors[edge]
+        return 0. if edge_type[edge] == "flat" else 1. - _dot(normals[a], normals[b])
+
+    # Where the unfolding starts changes how many pieces it ends in (a torus
+    # can come out in 2 pieces or 15), so try a few starts and keep the one
+    # with the fewest pieces. Bigger meshes get fewer tries to bound the time.
+    tries = min(8, max(2, 12000 // len(mesh.faces)))
+    best = None
+    for attempt in range(tries):
+        order = list(range(len(mesh.faces)))
+        if attempt:
+            Random(attempt).shuffle(order)
+        result = _grow(mesh.faces, points, neighbors, bend, cell, order)
+        score = (len(result[0]), result[1] + result[2])
+        if best is None or score < best[0]:
+            best = (score, result)
+    islands, refused, too_big = best[1]
+
+    merged = _merge_islands(islands, mesh.faces, neighbors, bend)
+    islands = [island for island in islands if island.coords]
+    fold_edges = set().union(*(island.folds for island in islands))
+
+    # _root/_across keep the triangle winding, so the page shows the model
+    # from inside when triangles wind counter-clockwise outward. Mirror then,
+    # so the printed side ends up outside and the model is not mirrored.
+    # Each island is also turned so its long side runs down the page.
+    mirror = oriented and outward > 0
+    forest = []
+    for island in islands:
+        width = island.bbox[2] - island.bbox[0]
+        height = island.bbox[3] - island.bbox[1]
+        turn = width > height
+
+        def place(point, mirror=mirror, turn=turn):
+            x, y = point
+            if mirror:
+                y = -y
+            return (-y, x) if turn else (x, y)
+        forest.append(({fi: {v: place(xy) for v, xy in mapping.items()}
+                        for fi, mapping in island.coords.items()}, island.folds))
+
+    seam_numbers = {}
+    for coordinates, folds in forest:
+        for fi in coordinates:
+            face = mesh.faces[fi]
             for k in range(3):
-                edge = tuple(sorted((pface[k], pface[(k + 1) % 3])))
-                adjacent = neighbors[edge]
-                if len(adjacent) != 2:
-                    continue
-                nxt = adjacent[0] if adjacent[1] == parent else adjacent[1]
-                if nxt in placed_faces:
-                    continue
-                triangle = _across(mesh.faces[nxt], pface,
-                                   coordinates[parent], points, edge)
-                coords = [triangle[index] for index in mesh.faces[nxt]]
-                # Use strict positive-area overlap, allowing shared edges.
-                if any(_intersection_area(coords,
-                       [existing[index] for index in mesh.faces[other]]) > 1e-5
-                       for other, existing in coordinates.items()):
-                    refused += 1
-                    continue
-                coordinates[nxt] = triangle
-                placed_faces.add(nxt)
-                queue.append(nxt)
-                folds.add(edge)
-                fold_edges.add(edge)
-        forest.append((coordinates, folds))
+                edge = tuple(sorted((face[k], face[(k + 1) % 3])))
+                if (len(neighbors[edge]) == 2 and edge not in folds
+                        and edge not in seam_numbers):
+                    seam_numbers[edge] = len(seam_numbers) + 1
 
     parts = []
     seam_edges = 0
     tab_count = 0
+    hidden_flat = 0
+    fold_counts = {"mountain": 0, "valley": 0}
     for piece_idx, (coordinates, folds) in enumerate(forest, 1):
         graphics = []
+        labels = []
+        grid = _Grid(cell)
         for fi, mapping in coordinates.items():
             triangle = [mapping[i] for i in mesh.faces[fi]]
-            graphics.append(_geom_poly(triangle, color))
+            grid.add(fi, triangle)
+            # Outline each triangle in its own colour so no hairline gap
+            # shows between neighbouring triangles of a flat face.
+            graphics.append(_geom_poly(triangle, color, stroke=color))
         for fi, mapping in coordinates.items():
             face = mesh.faces[fi]
             for k in range(3):
@@ -359,50 +656,77 @@ def unfold(mesh: Mesh, *, unit: str = "mm", scale: int = 1,
                 third = mapping[face[(k + 2) % 3]]
                 if edge in folds:
                     if fi == min(neighbors[edge]):
-                        graphics.append(_geom_line(p, q, "fold"))
+                        kind = edge_type[edge]
+                        if kind == "flat":
+                            hidden_flat += 1
+                        else:
+                            line = _geom_line(p, q, "fold")
+                            if kind in fold_counts:
+                                line["fold_type"] = kind
+                                fold_counts[kind] += 1
+                            graphics.append(line)
                     continue
                 # Shared edges not selected as folds become cut-and-glue seams.
                 shared = len(neighbors[edge]) == 2
+                if shared:
+                    label = _seam_label(p, q, third, seam_numbers[edge])
+                    if label is not None:
+                        labels.append(label)
                 tab_side = fi == min(neighbors[edge])
                 if shared and tab_side and glue_tabs:
                     polygon = _tab_coords(p, q, third)
                     if polygon is not None:
                         quad = polygon[1:5]
-                        if not any(_intersection_area(
-                              [quad[0], quad[1], quad[2]],
-                              [coords[v] for v in mesh.faces[j]]) > 1e-5 or
-                              _intersection_area(
-                              [quad[0], quad[2], quad[3]],
-                              [coords[v] for v in mesh.faces[j]]) > 1e-5
-                              for j, coords in coordinates.items() if j != fi):
+                        halves = ([quad[0], quad[1], quad[2]], [quad[0], quad[2], quad[3]])
+                        # Neither on a face of this piece nor on another tab.
+                        if not any(grid.hits(half, ignore=fi) for half in halves):
+                            for k_half, half in enumerate(halves):
+                                grid.add(("tab", tab_count, k_half), half)
                             graphics.append(_geom_poly(polygon, "#f1e5cb"))
                             for u, v in zip(polygon[:-1], polygon[1:]):
                                 graphics.append(_geom_line(u, v, "cut"))
-                            graphics.append(_geom_line(p, q, "fold"))
+                            tab_fold = _geom_line(p, q, "fold")
+                            if oriented:
+                                # Tabs fold behind the printed side.
+                                tab_fold["fold_type"] = "mountain"
+                            graphics.append(tab_fold)
                             tab_count += 1
                             seam_edges += 1
                             continue
                 graphics.append(_geom_line(p, q, "cut"))
                 if shared:
                     seam_edges += 1
-        parts.append(_part("Mesh island " + str(piece_idx), graphics))
+        parts.append(_part("Mesh island " + str(piece_idx), graphics + labels))
     warnings = [
         "OBJ/STLの座標には単位が含まれない場合があります。元単位と縮尺を確認してください。",
         "面の重なりを避けるため複数の展開島に分割する場合があります。",
-        "折り方向の山折り・谷折り、紙厚、切り代、物理的な組立品質は未検証です。",
+        "切り離した辺には両側に同じ番号を印刷しています。同じ番号どうしを貼り合わせてください。",
     ]
+    if oriented:
+        warnings.append("印刷面が外側になる向きで展開しました。一点鎖線は山折り、破線は谷折りです。"
+                        "紙厚・切り代は補正していません。")
+    else:
+        warnings.append("閉じていない、または面の向きがそろっていないメッシュのため、"
+                        "山折り・谷折りを区別できません（折り線はすべて破線）。")
     if open_edges:
         warnings.append("境界辺{}本：閉じていないメッシュです。底面や開口が残る可能性があります。".format(open_edges))
     if mesh.was_fan_triangulated:
         warnings.append("OBJの多角形を扇型三角分割しました。凹面は予め三角形化してください。")
     if refused:
         warnings.append("配置衝突により{}回の接続候補を分離しました。".format(refused))
+    if too_big:
+        warnings.append("1枚の用紙（A4）に収まるよう、大きな部品を分けました。")
     return MeshNet(
         parts=parts,
         stats={
             "format": mesh.source, "vertices": len(mesh.vertices),
             "triangles": len(mesh.faces), "islands": len(parts),
             "folds": len(fold_edges), "tabs": tab_count,
+            "mountain_folds": fold_counts["mountain"],
+            "valley_folds": fold_counts["valley"],
+            "flat_edges_hidden": hidden_flat,
+            "seams": len(seam_numbers), "oriented": oriented,
+            "merged_islands": merged,
             "open_edges": open_edges,
             "size_mm": [round(d, 3) for d in dimensions],
         },
