@@ -10,8 +10,9 @@ free-form surface fitting, texture baking, or globally optimal net search.
 """
 from __future__ import annotations
 
-from collections import defaultdict, deque
+from collections import defaultdict
 from dataclasses import dataclass
+from heapq import heappop, heappush
 from math import hypot, isfinite, sqrt
 from struct import unpack_from
 from typing import NamedTuple
@@ -249,6 +250,73 @@ def _across(face, parent_face, parent_xy, points, common):
     return {u: p, v: q, w: new}
 
 
+FLAT_COS = 0.99995  # about 0.6 degrees between neighbouring normals
+
+
+def _sub3(a, b):
+    return (a[0] - b[0], a[1] - b[1], a[2] - b[2])
+
+
+def _cross3(a, b):
+    return (a[1] * b[2] - a[2] * b[1],
+            a[2] * b[0] - a[0] * b[2],
+            a[0] * b[1] - a[1] * b[0])
+
+
+def _dot(a, b):
+    return a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
+
+
+def _normal(face, points):
+    a, b, c = (points[i] for i in face)
+    n = _cross3(_sub3(b, a), _sub3(c, a))
+    length = sqrt(_dot(n, n))
+    return (n[0] / length, n[1] / length, n[2] / length) if length > EPS else (0., 0., 0.)
+
+
+def _opposite_winding(face_a, face_b, edge):
+    """True when the two triangles walk their shared edge in opposite directions."""
+    def direction(face):
+        for k in range(3):
+            if (face[k], face[(k + 1) % 3]) == edge:
+                return 1
+            if (face[(k + 1) % 3], face[k]) == edge:
+                return -1
+        return 0
+    return direction(face_a) * direction(face_b) == -1
+
+
+def _edge_type(faces, normals, points, edge, adjacent, outward):
+    """flat, mountain or valley (seen from the printed outside), or fold if unknown."""
+    a, b = adjacent
+    if abs(_dot(normals[a], normals[b])) >= FLAT_COS:
+        return "flat"
+    if outward is None:
+        return "fold"
+    other = next(i for i in faces[b] if i not in edge)
+    n = normals[a]
+    height = _dot((n[0] * outward, n[1] * outward, n[2] * outward),
+                  _sub3(points[other], points[edge[0]]))
+    return "mountain" if height < 0 else "valley"
+
+
+def _seam_label(p, q, third, number):
+    """Edge number printed just inside the face, centred on the edge."""
+    dx, dy = q[0] - p[0], q[1] - p[1]
+    length = hypot(dx, dy)
+    if length < 1.5:
+        return None
+    inward = abs(_cross2(p, q, third)) / length
+    size = max(1.2, min(2.8, length * .3, inward * .45))
+    sign = 1 if _cross2(p, q, third) > 0 else -1
+    nx, ny = -dy / length * sign, dx / length * sign
+    offset = min(size * .9, inward * .4)
+    return {"type": "text", "x": (p[0] + q[0]) / 2 + nx * offset,
+            "y": (p[1] + q[1]) / 2 + ny * offset, "text": str(number),
+            "size": round(size, 2), "kind": "detail", "fill": "#7a2e1f",
+            "stroke": "none"}
+
+
 def _geom_line(p, q, kind, color="#333333"):
     return {"type": "line", "x1": p[0], "y1": p[1],
             "x2": q[0], "y2": q[1],
@@ -302,21 +370,41 @@ def unfold(mesh: Mesh, *, unit: str = "mm", scale: int = 1,
             if len(neighbors[edge]) > 2:
                 raise MeshError("3面以上が共有する辺があります。非多様体メッシュを修復してください。")
     open_edges = sum(len(indices) == 1 for indices in neighbors.values())
+    normals = [_normal(face, points) for face in mesh.faces]
+    # Mountain/valley folds need a trustworthy outside. Only a closed mesh
+    # whose triangles all wind the same way gives one.
+    consistent = all(_opposite_winding(mesh.faces[a], mesh.faces[b], edge)
+                     for edge, (a, b) in ((e, f) for e, f in neighbors.items()
+                                          if len(f) == 2))
+    oriented = consistent and not open_edges
+    volume = sum(_dot(points[f[0]], _cross3(points[f[1]], points[f[2]]))
+                 for f in mesh.faces)
+    outward = 1.0 if volume >= 0 else -1.0
+    edge_type = {}
+    for edge, adjacent in neighbors.items():
+        if len(adjacent) == 2:
+            edge_type[edge] = _edge_type(mesh.faces, normals, points, edge,
+                                         adjacent, outward if oriented else None)
+
     placed_faces = set()
     forest = []
     refused = 0
     fold_edges = set()
+    counter = 0
 
     # Start a fresh island for any triangle whose overlap-free connection is
     # unavailable. This guarantees every input triangle is represented.
+    # Edges inside a flat face are joined first, so a flat polygon stays in
+    # one piece without fold lines across it.
     while len(placed_faces) < len(mesh.faces):
         root_id = next(i for i in range(len(mesh.faces)) if i not in placed_faces)
         coordinates = {root_id: _root(mesh.faces[root_id], points)}
         placed_faces.add(root_id)
-        queue = deque([root_id])
+        heap = []
         folds = set()
-        while queue:
-            parent = queue.popleft()
+
+        def push(parent):
+            nonlocal counter
             pface = mesh.faces[parent]
             for k in range(3):
                 edge = tuple(sorted((pface[k], pface[(k + 1) % 3])))
@@ -326,30 +414,67 @@ def unfold(mesh: Mesh, *, unit: str = "mm", scale: int = 1,
                 nxt = adjacent[0] if adjacent[1] == parent else adjacent[1]
                 if nxt in placed_faces:
                     continue
-                triangle = _across(mesh.faces[nxt], pface,
-                                   coordinates[parent], points, edge)
-                coords = [triangle[index] for index in mesh.faces[nxt]]
-                # Use strict positive-area overlap, allowing shared edges.
-                if any(_intersection_area(coords,
-                       [existing[index] for index in mesh.faces[other]]) > 1e-5
-                       for other, existing in coordinates.items()):
-                    refused += 1
-                    continue
-                coordinates[nxt] = triangle
-                placed_faces.add(nxt)
-                queue.append(nxt)
-                folds.add(edge)
-                fold_edges.add(edge)
+                counter += 1
+                # Gentlest bends first: flat joins, then shallow folds, so a
+                # curved band (a cylinder side) stays one strip.
+                a, b = adjacent
+                priority = 0. if edge_type[edge] == "flat" else \
+                    1. - _dot(normals[a], normals[b])
+                heappush(heap, (priority, counter, parent, nxt, edge))
+
+        push(root_id)
+        while heap:
+            _, _, parent, nxt, edge = heappop(heap)
+            if nxt in placed_faces:
+                continue
+            pface = mesh.faces[parent]
+            triangle = _across(mesh.faces[nxt], pface,
+                               coordinates[parent], points, edge)
+            coords = [triangle[index] for index in mesh.faces[nxt]]
+            # Use strict positive-area overlap, allowing shared edges.
+            if any(_intersection_area(coords,
+                   [existing[index] for index in mesh.faces[other]]) > 1e-5
+                   for other, existing in coordinates.items()):
+                refused += 1
+                continue
+            coordinates[nxt] = triangle
+            placed_faces.add(nxt)
+            folds.add(edge)
+            fold_edges.add(edge)
+            push(nxt)
         forest.append((coordinates, folds))
+
+    # _root/_across keep the triangle winding, so the page shows the model
+    # from inside when triangles wind counter-clockwise outward. Mirror then,
+    # so the printed side ends up outside and the model is not mirrored.
+    if oriented and outward > 0:
+        forest = [({fi: {v: (x, -y) for v, (x, y) in mapping.items()}
+                    for fi, mapping in coordinates.items()}, folds)
+                  for coordinates, folds in forest]
+
+    seam_numbers = {}
+    for coordinates, folds in forest:
+        for fi in coordinates:
+            face = mesh.faces[fi]
+            for k in range(3):
+                edge = tuple(sorted((face[k], face[(k + 1) % 3])))
+                if (len(neighbors[edge]) == 2 and edge not in folds
+                        and edge not in seam_numbers):
+                    seam_numbers[edge] = len(seam_numbers) + 1
 
     parts = []
     seam_edges = 0
     tab_count = 0
+    hidden_flat = 0
+    fold_counts = {"mountain": 0, "valley": 0}
     for piece_idx, (coordinates, folds) in enumerate(forest, 1):
         graphics = []
+        labels = []
         for fi, mapping in coordinates.items():
             triangle = [mapping[i] for i in mesh.faces[fi]]
-            graphics.append(_geom_poly(triangle, color))
+            # Outline each triangle in its own colour so no hairline gap
+            # shows between neighbouring triangles of a flat face.
+            graphics.append(_geom_poly(triangle, color, stroke=color))
         for fi, mapping in coordinates.items():
             face = mesh.faces[fi]
             for k in range(3):
@@ -359,10 +484,22 @@ def unfold(mesh: Mesh, *, unit: str = "mm", scale: int = 1,
                 third = mapping[face[(k + 2) % 3]]
                 if edge in folds:
                     if fi == min(neighbors[edge]):
-                        graphics.append(_geom_line(p, q, "fold"))
+                        kind = edge_type[edge]
+                        if kind == "flat":
+                            hidden_flat += 1
+                        else:
+                            line = _geom_line(p, q, "fold")
+                            if kind in fold_counts:
+                                line["fold_type"] = kind
+                                fold_counts[kind] += 1
+                            graphics.append(line)
                     continue
                 # Shared edges not selected as folds become cut-and-glue seams.
                 shared = len(neighbors[edge]) == 2
+                if shared:
+                    label = _seam_label(p, q, third, seam_numbers[edge])
+                    if label is not None:
+                        labels.append(label)
                 tab_side = fi == min(neighbors[edge])
                 if shared and tab_side and glue_tabs:
                     polygon = _tab_coords(p, q, third)
@@ -378,19 +515,29 @@ def unfold(mesh: Mesh, *, unit: str = "mm", scale: int = 1,
                             graphics.append(_geom_poly(polygon, "#f1e5cb"))
                             for u, v in zip(polygon[:-1], polygon[1:]):
                                 graphics.append(_geom_line(u, v, "cut"))
-                            graphics.append(_geom_line(p, q, "fold"))
+                            tab_fold = _geom_line(p, q, "fold")
+                            if oriented:
+                                # Tabs fold behind the printed side.
+                                tab_fold["fold_type"] = "mountain"
+                            graphics.append(tab_fold)
                             tab_count += 1
                             seam_edges += 1
                             continue
                 graphics.append(_geom_line(p, q, "cut"))
                 if shared:
                     seam_edges += 1
-        parts.append(_part("Mesh island " + str(piece_idx), graphics))
+        parts.append(_part("Mesh island " + str(piece_idx), graphics + labels))
     warnings = [
         "OBJ/STLの座標には単位が含まれない場合があります。元単位と縮尺を確認してください。",
         "面の重なりを避けるため複数の展開島に分割する場合があります。",
-        "折り方向の山折り・谷折り、紙厚、切り代、物理的な組立品質は未検証です。",
+        "切り離した辺には両側に同じ番号を印刷しています。同じ番号どうしを貼り合わせてください。",
     ]
+    if oriented:
+        warnings.append("印刷面が外側になる向きで展開しました。一点鎖線は山折り、破線は谷折りです。"
+                        "紙厚・切り代は補正していません。")
+    else:
+        warnings.append("閉じていない、または面の向きがそろっていないメッシュのため、"
+                        "山折り・谷折りを区別できません（折り線はすべて破線）。")
     if open_edges:
         warnings.append("境界辺{}本：閉じていないメッシュです。底面や開口が残る可能性があります。".format(open_edges))
     if mesh.was_fan_triangulated:
@@ -403,6 +550,10 @@ def unfold(mesh: Mesh, *, unit: str = "mm", scale: int = 1,
             "format": mesh.source, "vertices": len(mesh.vertices),
             "triangles": len(mesh.faces), "islands": len(parts),
             "folds": len(fold_edges), "tabs": tab_count,
+            "mountain_folds": fold_counts["mountain"],
+            "valley_folds": fold_counts["valley"],
+            "flat_edges_hidden": hidden_flat,
+            "seams": len(seam_numbers), "oriented": oriented,
             "open_edges": open_edges,
             "size_mm": [round(d, 3) for d in dimensions],
         },

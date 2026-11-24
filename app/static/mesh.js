@@ -30,6 +30,9 @@
          " ｜ 三角形 " + stats.triangles +
          " ｜ 展開パーツ " + stats.islands +
          " ｜ 接着タブ " + stats.tabs +
+         (stats.oriented ? " ｜ 山折り " + stats.mountain_folds +
+           " ・谷折り " + stats.valley_folds : "") +
+         (stats.seams !== undefined ? " ｜ 貼り合わせ番号 " + stats.seams : "") +
          " ｜ A4 " + job.pages + "ページ");
     note("模型サイズ（mm）： " + stats.size_mm.join(" × ") +
          " ／ 縮尺 1/" + stats.scale +
